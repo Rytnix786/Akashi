@@ -1,0 +1,32 @@
+# ─── Phase 1: Sentinel Hub NDVI Script ────────────────────────────────────────
+requests==2.32.3          # OAuth + HTTP calls to Sentinel Hub
+python-dotenv==1.0.1      # Load .env variables
+shapely==2.0.6            # GeoJSON geometry validation
+
+# ─── Phase 3: FastAPI Backend ──────────────────────────────────────────────────
+fastapi==0.115.6
+uvicorn[standard]==0.32.1
+pydantic==2.10.4
+pydantic-settings==2.7.0
+
+# ─── Database ─────────────────────────────────────────────────────────────────
+asyncpg==0.30.0           # Async PostgreSQL driver for Supabase
+# supabase==2.11.0          # Unused - using direct REST client
+
+# ─── Scheduler ────────────────────────────────────────────────────────────────
+apscheduler==3.10.4       # 5-day NDVI cron job
+
+# ─── HTTP client (async) ──────────────────────────────────────────────────────
+httpx==0.28.1             # Async HTTP for Sentinel Hub calls in service layer
+
+# ─── Firebase Cloud Messaging ─────────────────────────────────────────────────
+firebase-admin==6.6.0     # FCM push notifications
+
+# ─── Utilities ────────────────────────────────────────────────────────────────
+python-jose[cryptography]==3.3.0  # JWT validation
+geojson==3.1.0            # GeoJSON parsing helpers
+
+# ─── Testing ──────────────────────────────────────────────────────────────────
+pytest==8.3.4
+pytest-asyncio==0.24.0
+httpx==0.28.1             # Also used for async test client

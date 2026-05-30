@@ -1,0 +1,64 @@
+@import "tailwindcss";
+
+:root {
+  --background: #f8f9ff;
+  --foreground: #171c22;
+}
+
+@theme {
+  --color-primary: #00450d;
+  --color-primary-container: #1b5e20;
+  --color-on-primary-container: #90d689;
+  --color-secondary: #00639a;
+  --color-secondary-container: #51b2fe;
+  --color-on-secondary-container: #00223c;
+  --color-tertiary: #4c3700;
+  --color-error: #ba1a1a;
+  --color-surface: #f8f9ff;
+  --color-surface-dim: #d6dae3;
+  --color-surface-container: #eaeef7;
+  --color-on-surface: #171c22;
+}
+
+/* Custom baseline styling matching Stitch agricultural corporate specifications */
+body {
+  background-color: var(--background);
+  color: var(--foreground);
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  overflow-x: hidden;
+}
+
+/* Operational animations */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* Custom Leaflet style overrides to fit cleanly into premium dashboard containers */
+.leaflet-container {
+  height: 100% !important;
+  width: 100% !important;
+  border-radius: 0.75rem;
+  background-color: #eaeef7 !important;
+  z-index: 1;
+}
+
+/* PDF Print styling logic for clean government briefs */
+@media print {
+  body {
+    background: white !important;
+    color: black !important;
+  }
+  .no-print {
+    display: none !important;
+  }
+  .print-card {
+    border: 1px solid #d6dae3 !important;
+    box-shadow: none !important;
+    break-inside: avoid;
+  }
+}
