@@ -1,0 +1,15 @@
+.git
+.gitignore
+.env
+.qodo/
+.vscode/
+Docs_Useful/
+SKILLS_Main_Added/
+build/
+**/__pycache__/
+**/*.pyc
+akashi-app/build/
+akashi-app/.dart_tool/
+akashi-app/.idea/
+akashi-backend/.env
+akashi-backend/__pycache__/
