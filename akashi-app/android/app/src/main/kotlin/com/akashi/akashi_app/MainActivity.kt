@@ -1,4 +1,4 @@
-package com.akashi.akashi_app
+package com.akashi.farmer
 
 import io.flutter.embedding.android.FlutterActivity
 

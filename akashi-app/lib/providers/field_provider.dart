@@ -3,11 +3,17 @@ library;
 
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'auth_provider.dart';
 import '../models/field.dart';
 import '../models/health_reading.dart';
 
 class FieldProvider extends ChangeNotifier {
   final _supabase = Supabase.instance.client;
+  final AuthProvider _authProvider;
+
+  FieldProvider(this._authProvider);
+
+  String? get _activeUserId => _authProvider.userId ?? _supabase.auth.currentUser?.id;
 
   List<FieldModel> _fields = [];
   Map<String, List<HealthReading>> _readingsByField = {};
@@ -28,7 +34,7 @@ class FieldProvider extends ChangeNotifier {
       _readingsByField[fieldId] ?? [];
 
   Future<void> loadFields() async {
-    final userId = _supabase.auth.currentUser?.id;
+    final userId = _activeUserId;
     if (userId == null) return;
 
     _isLoading = true;
@@ -86,7 +92,7 @@ class FieldProvider extends ChangeNotifier {
     required String district,
     required String upazila,
   }) async {
-    final userId = _supabase.auth.currentUser?.id;
+    final userId = _activeUserId;
     if (userId == null) throw Exception('Not authenticated');
 
     // Build GeoJSON polygon

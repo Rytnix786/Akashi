@@ -5,12 +5,14 @@
 library;
 
 import 'dart:async';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/theme/colors.dart';
 import '../../core/theme/typography.dart';
 import '../../core/l10n/bn_strings.dart';
+import '../../core/config/demo_accounts.dart';
 import '../../providers/auth_provider.dart';
 import 'profile_setup_screen.dart';
 import '../home_screen.dart';
@@ -98,6 +100,44 @@ class _OtpScreenState extends State<OtpScreen> {
     setState(() => _secondsLeft = 120);
     _timer?.cancel();
     _startTimer();
+  }
+
+  Future<void> _autoLoginDemo(DemoAccount account) async {
+    final authProvider = context.read<AuthProvider>();
+    setState(() {
+      _isLoading = true;
+      _hasError = false;
+    });
+
+    try {
+      final success = await authProvider.seedAutoLogin(account.phone);
+      if (!mounted) return;
+
+      if (!success) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('${account.phone} এর ডেমো ডেটা খুঁজে পাওয়া যায়নি'),
+            backgroundColor: AkashiColors.error,
+          ),
+        );
+        return;
+      }
+
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute(builder: (_) => const HomeScreen()),
+        (route) => false,
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(BnStrings.genericError),
+          backgroundColor: AkashiColors.error,
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
   }
 
   void _onDigitEntered(int index, String value) {
@@ -243,6 +283,64 @@ class _OtpScreenState extends State<OtpScreen> {
                         ),
                       ),
               ),
+
+              if (kDebugMode) ...[
+                const SizedBox(height: 24),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: AkashiColors.secondaryContainer.withValues(alpha: 0.18),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: AkashiColors.outlineVariant),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Seeded auto login',
+                        style: AkashiTextTheme.titleLg.copyWith(
+                          color: AkashiColors.onSurface,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        'এখান থেকে seeded test farmer দিয়ে সরাসরি home screen এ ঢোকা যাবে।',
+                        style: AkashiTextTheme.bodyMd.copyWith(
+                          color: AkashiColors.onSurfaceVariant,
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      ...demoAccounts.map(
+                        (account) => Padding(
+                          padding: const EdgeInsets.only(bottom: 10),
+                          child: SizedBox(
+                            width: double.infinity,
+                            height: 48,
+                            child: OutlinedButton(
+                              onPressed: _isLoading ? null : () => _autoLoginDemo(account),
+                              style: OutlinedButton.styleFrom(
+                                side: BorderSide(color: AkashiColors.primary.withValues(alpha: 0.35)),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                              ),
+                              child: Text(
+                                '${account.name} • ${account.phone}',
+                                style: AkashiTextTheme.bodyMd.copyWith(
+                                  color: AkashiColors.primary,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
             ],
           ),
         ),

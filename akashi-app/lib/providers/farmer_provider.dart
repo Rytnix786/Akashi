@@ -3,10 +3,16 @@ library;
 
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'auth_provider.dart';
 import '../models/farmer.dart';
 
 class FarmerProvider extends ChangeNotifier {
   final _supabase = Supabase.instance.client;
+  final AuthProvider _authProvider;
+
+  FarmerProvider(this._authProvider);
+
+  String? get _activeUserId => _authProvider.userId ?? _supabase.auth.currentUser?.id;
 
   FarmerModel? _farmer;
   bool _isLoading = false;
@@ -15,7 +21,7 @@ class FarmerProvider extends ChangeNotifier {
   bool get isLoading => _isLoading;
 
   Future<void> loadProfile() async {
-    final userId = _supabase.auth.currentUser?.id;
+    final userId = _activeUserId;
     if (userId == null) return;
 
     _isLoading = true;
@@ -45,12 +51,12 @@ class FarmerProvider extends ChangeNotifier {
     required String upazila,
     required String cropType,
   }) async {
-    final user = _supabase.auth.currentUser;
-    if (user == null) throw Exception('Not authenticated');
+    final userId = _activeUserId;
+    if (userId == null) throw Exception('Not authenticated');
 
     final data = await _supabase.from('farmers').upsert({
-      'id': user.id,
-      'phone': user.phone ?? '',
+      'id': userId,
+      'phone': _authProvider.phone ?? '',
       'name': name,
       'district': district,
       'upazila': upazila,
@@ -61,7 +67,7 @@ class FarmerProvider extends ChangeNotifier {
   }
 
   Future<void> updateFcmToken(String token) async {
-    final userId = _supabase.auth.currentUser?.id;
+    final userId = _activeUserId;
     if (userId == null) return;
 
     await _supabase

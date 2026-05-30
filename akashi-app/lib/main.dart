@@ -4,6 +4,7 @@ library;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:firebase_core/firebase_core.dart';
@@ -63,8 +64,12 @@ class AkashiApp extends StatelessWidget {
     return MultiProvider(
       providers: [
         ChangeNotifierProvider(create: (_) => AuthProvider()),
-        ChangeNotifierProvider(create: (_) => FarmerProvider()),
-        ChangeNotifierProvider(create: (_) => FieldProvider()),
+        ChangeNotifierProvider(
+          create: (context) => FarmerProvider(context.read<AuthProvider>()),
+        ),
+        ChangeNotifierProvider(
+          create: (context) => FieldProvider(context.read<AuthProvider>()),
+        ),
         ChangeNotifierProvider(create: (_) => WeatherProvider()),
       ],
       child: MaterialApp(
@@ -74,8 +79,9 @@ class AkashiApp extends StatelessWidget {
 
         // ─── Bengali locale support ──────────────────────────────────────
         localizationsDelegates: const [
-          DefaultMaterialLocalizations.delegate,
-          DefaultWidgetsLocalizations.delegate,
+          GlobalMaterialLocalizations.delegate,
+          GlobalWidgetsLocalizations.delegate,
+          GlobalCupertinoLocalizations.delegate,
         ],
         supportedLocales: const [
           Locale('bn', 'BD'), // Bengali — Bangladesh
