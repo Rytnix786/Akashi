@@ -81,6 +81,7 @@ CREATE TABLE IF NOT EXISTS health_readings (
   cloud_cover   DECIMAL(5,2),                 -- % cloud cover (0-100)
   health_status TEXT CHECK (health_status IN ('green','yellow','red','unknown')),
   pixel_count   INTEGER,                      -- Valid (non-cloud) pixels analyzed
+  data_source   TEXT DEFAULT 'sentinel-2',    -- sentinel-2 | sentinel-1
   raw_response  JSONB,                        -- Full Sentinel Hub response
   created_at    TIMESTAMPTZ DEFAULT NOW()
 );
