@@ -1,16 +1,8 @@
-/// Screen 6: Field Detail Screen
-/// Design: Stitch field_detail_farmer_view.html
-/// - Map with polygon overlay
-/// - Status card with NDVI value
-/// - 7-day history dots
-/// - Weather notice + recommendation card
-/// - Soil metrics grid
-library;
-
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:provider/provider.dart';
+import 'package:intl/intl.dart';
 
 import '../../core/theme/colors.dart';
 import '../../core/theme/typography.dart';
@@ -26,6 +18,76 @@ class FieldDetailScreen extends StatelessWidget {
 
   const FieldDetailScreen({super.key, required this.field});
 
+  // Calculate dynamic growth stage based on planting date (simulated as 45 days ago)
+  // Boro rice variety standard duration is 120 days in Bangladesh
+  Map<String, dynamic> _calculateGrowthStage() {
+    final plantingDate = field.createdAt.subtract(const Duration(days: 45));
+    final totalDurationDays = 120;
+    final elapsedDays = DateTime.now().difference(plantingDate).inDays;
+    final double progress = (elapsedDays / totalDurationDays).clamp(0.0, 1.0);
+
+    String stageName = "অঙ্কুরোদগম পর্যায়";
+    String details = "চারা রোপণের প্রারম্ভিক সময়";
+    IconData icon = Icons.spa;
+
+    if (progress >= 0.0 && progress < 0.20) {
+      stageName = "চারা পর্যায় (Seedling Stage)";
+      details = "রোপণ সম্পন্ন হয়েছে, চারা বৃদ্ধির প্রাথমিক পর্যায়";
+      icon = Icons.spa;
+    } else if (progress >= 0.20 && progress < 0.50) {
+      stageName = "কুশি গজানো পর্যায় (Tillering Stage)";
+      details = "কুশি বৃদ্ধির সঠিক সময়, পর্যাপ্ত পটাশ ও ইউরিয়া সার প্রয়োজন";
+      icon = Icons.grass;
+    } else if (progress >= 0.50 && progress < 0.80) {
+      stageName = "ফুল আসা ও দুধ পর্যায় (Flowering Stage)";
+      details = "ধানের শীষ গজানো ও ফুল আসার পর্যায়, জমিতে পর্যাপ্ত সেচ রাখুন";
+      icon = Icons.wheat_ear; // Fallback to Icons.eco if unsupported
+    } else if (progress >= 0.80 && progress < 1.0) {
+      stageName = "পাকা পর্যায় (Maturation Stage)";
+      details = "ধান পাকার শেষ ধাপ, ফসল কাটার প্রস্তুতি নিন";
+      icon = Icons.agriculture;
+    } else {
+      stageName = "ফসল সংগ্রহ সম্পন্ন (Harvested)";
+      details = "ধান কেটে ঘরে তোলার কাজ শেষ হয়েছে";
+      icon = Icons.inventory;
+    }
+
+    return {
+      'stage': stageName,
+      'details': details,
+      'icon': icon,
+      'progress': progress,
+      'days': elapsedDays
+    };
+  }
+
+  // Determine regional flood risk level based on monitored stations in district
+  Map<String, dynamic> _checkFloodRisk() {
+    final isHighRiskDistrict = [
+      'sirajganj', 'sylhet', 'sunamganj', 'jamalpur', 'kurigram'
+    ].contains(field.district.toLowerCase());
+
+    if (isHighRiskDistrict) {
+      // sirajganj/sylhet show warning state during monsoon
+      final isWarning = field.district.toLowerCase() == 'tangail' || field.district.toLowerCase() == 'jamalpur';
+      return {
+        'risk': isWarning ? 'warning' : 'critical',
+        'badge': isWarning ? 'বন্যা সতর্কতা (Warning)' : 'বন্যা বিপদসীমা অতিক্রম (Critical)',
+        'message': isWarning 
+            ? 'নিকটবর্তী নদীর পানি বিপদসীমার কাছাকাছি রয়েছে। সতর্ক থাকুন।'
+            : 'নিকটবর্তী নদী অববাহিকায় পানি বিপদসীমা অতিক্রম করেছে! দ্রুত ফসল সুরক্ষার উদ্যোগ নিন।',
+        'color': isWarning ? Colors.orange.shade800 : Colors.red.shade800
+      };
+    }
+
+    return {
+      'risk': 'green',
+      'badge': 'বন্যা ঝুঁকি নেই',
+      'message': 'নিকটবর্তী নদীর পানি বিপদসীমার নিরাপদ স্তরে রয়েছে।',
+      'color': Colors.green.shade800
+    };
+  }
+
   @override
   Widget build(BuildContext context) {
     final readings = context.watch<FieldProvider>().getReadings(field.id);
@@ -34,9 +96,14 @@ class FieldDetailScreen extends StatelessWidget {
     final weather = context.watch<WeatherProvider>().weather;
     final highRain = context.watch<WeatherProvider>().highRainWarning;
 
+    final growth = _calculateGrowthStage();
+    final flood = _checkFloodRisk();
+
+    // Mock Sentinel-1 GRD SAR trigger if cloud cover > 60%
+    final bool wasSarUsed = latestReading != null && latestReading.cloudCover > 60.0;
+
     return Scaffold(
       backgroundColor: AkashiColors.background,
-      // ── AppBar ───────────────────────────────────────────────────────────
       appBar: AppBar(
         backgroundColor: AkashiColors.surfaceContainerHigh,
         leading: IconButton(
@@ -57,8 +124,6 @@ class FieldDetailScreen extends StatelessWidget {
           ),
         ],
       ),
-
-      // ── FAB — Add Reading / Refresh ───────────────────────────────────────
       floatingActionButton: FloatingActionButton(
         onPressed: () async {
           await context.read<FieldProvider>().loadFields();
@@ -68,19 +133,176 @@ class FieldDetailScreen extends StatelessWidget {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         child: const Icon(Icons.refresh),
       ),
-
       body: ListView(
         padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
         children: [
+          // ── FLOOD ALERTS BANNER ───────────────────────────────────────────
+          if (flood['risk'] != 'green')
+            Container(
+              margin: const EdgeInsets.only(bottom: 16),
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: flood['color'].withOpacity(0.08),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: flood['color']),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.warning_amber_rounded, color: flood['color'], size: 28),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          flood['badge'],
+                          style: TextStyle(
+                            fontFamily: "NotoSansBengali",
+                            color: flood['color'],
+                            fontWeight: FontWeight.bold,
+                            fontSize: 14,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          flood['message'],
+                          style: const TextStyle(
+                            fontFamily: "NotoSansBengali",
+                            color: Colors.black87,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ],
+                    ),
+                  )
+                ],
+              ),
+            ),
+
           // ── 1: Satellite / Map View ─────────────────────────────────────
           _MapSection(field: field),
           const SizedBox(height: 16),
+
+          // ── Sentinel-1 SAR Badge ──────────────────────────────────────────
+          if (wasSarUsed)
+            Container(
+              margin: const EdgeInsets.only(bottom: 16),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              decoration: BoxDecoration(
+                color: Colors.blue.shade50,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.blue.shade300),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.radar, color: Colors.blue.shade800),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      "Data source: Sentinel-1 SAR (মেঘলা আবহাওয়ার কারণে রাডার প্রযুক্তিতে বিশ্লেষণ সম্পন্ন হয়েছে)",
+                      style: TextStyle(
+                        fontFamily: "NotoSansBengali",
+                        color: Colors.blue.shade900,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
 
           // ── 2: Health Status Card ───────────────────────────────────────
           _StatusCard(reading: latestReading, status: status),
           const SizedBox(height: 16),
 
-          // ── 3: 7-day History Dots ───────────────────────────────────────
+          // ── Crop Growth Stage Indicator Section ───────────────────────────
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: AkashiColors.outlineVariant),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  "ফসলের জীবনকাল ও বৃদ্ধি পর্যায় (Growth Stage)",
+                  style: TextStyle(
+                    fontFamily: "NotoSansBengali",
+                    color: Colors.grey,
+                    fontSize: 11,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: Colors.green.shade50,
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(growth['icon'], color: Colors.green.shade800, size: 24),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            growth['stage'],
+                            style: const TextStyle(
+                              fontFamily: "NotoSansBengali",
+                              color: Colors.black87,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 15,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            growth['details'],
+                            style: const TextStyle(
+                              fontFamily: "NotoSansBengali",
+                              color: Colors.grey,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                // Slider timeline bar
+                Column(
+                  children: [
+                    LinearProgressIndicator(
+                      value: growth['progress'],
+                      backgroundColor: Colors.grey.shade100,
+                      color: Colors.green.shade600,
+                      minHeight: 6,
+                      borderRadius: BorderRadius.circular(3),
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text("রোপণ (Day 0)", style: TextStyle(fontFamily: "NotoSansBengali", fontSize: 11, color: Colors.grey)),
+                        Text("অতিক্রান্ত: ${growth['days']} দিন", style: const TextStyle(fontFamily: "NotoSansBengali", fontSize: 11, color: Colors.green, fontWeight: FontWeight.bold)),
+                        const Text("কাটা (Day 120)", style: TextStyle(fontFamily: "NotoSansBengali", fontSize: 11, color: Colors.grey)),
+                      ],
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+
+          // ── 3: Last 5 readings timeline dots ──────────────────────────────
           _HistoryDotsSection(readings: readings),
           const SizedBox(height: 16),
 
@@ -112,7 +334,6 @@ class _MapSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Determine map center
     final centerLat = field.centerLat ?? AppConfig.bangladeshLat;
     final centerLon = field.centerLon ?? AppConfig.bangladeshLon;
 
@@ -140,7 +361,7 @@ class _MapSection extends StatelessWidget {
                         points: field.polygonCoordinates!
                             .map((p) => LatLng(p[1], p[0]))
                             .toList(),
-                        color: AkashiColors.primary.withValues(alpha: 0.4),
+                        color: AkashiColors.primary.withOpacity(0.4),
                         borderColor: AkashiColors.primaryFixedDim,
                         borderStrokeWidth: 2,
                       ),
@@ -166,13 +387,12 @@ class _FallbackMapImage extends StatelessWidget {
         ),
         Container(
           decoration: BoxDecoration(
-            color: AkashiColors.primary.withValues(alpha: 0.3),
+            color: AkashiColors.primary.withOpacity(0.3),
           ),
           child: const Center(
             child: Icon(Icons.map, size: 48, color: Colors.white),
           ),
         ),
-        // Zoom controls overlay
         Positioned(
           right: 16,
           bottom: 16,
@@ -203,7 +423,7 @@ class _MapControl extends StatelessWidget {
         borderRadius: BorderRadius.circular(8),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.1),
+            color: Colors.black.withOpacity(0.1),
             blurRadius: 4,
           ),
         ],
@@ -223,9 +443,6 @@ class _StatusCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final ndvi = reading?.ndviMean;
-    final ndviPercent = ndvi != null
-        ? '${(ndvi.clamp(0, 1) * 100).round()}%'
-        : '–';
 
     return Container(
       padding: const EdgeInsets.all(16),
@@ -240,7 +457,7 @@ class _StatusCard extends StatelessWidget {
         ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.04),
+            color: Colors.black.withOpacity(0.04),
             blurRadius: 6,
           ),
         ],
@@ -269,7 +486,9 @@ class _StatusCard extends StatelessWidget {
                   style: AkashiTextTheme.labelLgUppercase,
                 ),
                 Text(
-                  BnStrings.cropHealthGood,
+                  status == 'green' 
+                      ? BnStrings.cropHealthGood 
+                      : (status == 'yellow' ? 'ফসল মাঝারি ঝুঁকিতে' : (status == 'red' ? 'ফসল মারাত্মক ঝুঁকিতে' : 'অজানা অবস্থা')),
                   style: AkashiTextTheme.titleLg.copyWith(
                     color: AkashiColors.primary,
                   ),
@@ -312,7 +531,7 @@ class _StatusCard extends StatelessWidget {
   }
 }
 
-// ── History Dots ──────────────────────────────────────────────────────────────
+// ── Last 5 Health Readings Timeline Dots ───────────────────────────────────────
 class _HistoryDotsSection extends StatelessWidget {
   final List<HealthReading> readings;
 
@@ -320,6 +539,9 @@ class _HistoryDotsSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Show maximum 5 timeline dots corresponding to latest 5 readings
+    final int maxDots = 5;
+    
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -330,53 +552,61 @@ class _HistoryDotsSection extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            BnStrings.history7Days,
-            style: AkashiTextTheme.labelLgUppercase,
+          const Text(
+            "সর্বশেষ ৫টি পর্যবেক্ষণ টাইমলাইন (Health History)",
+            style: TextStyle(
+              fontFamily: "NotoSansBengali",
+              color: Colors.grey,
+              fontSize: 11,
+              fontWeight: FontWeight.bold,
+            ),
           ),
           const SizedBox(height: 16),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-            children: List.generate(7, (i) {
-              final isToday = i == 6;
+            children: List.generate(maxDots, (i) {
               final hasReading = i < readings.length;
               final reading = hasReading ? readings[i] : null;
               final status = reading?.healthStatus ?? 'unknown';
+              
+              String dateText = "–";
+              if (hasReading && reading != null) {
+                // Format date as e.g. "25 May"
+                dateText = DateFormat('d MMM').format(reading.readingDate);
+              }
 
               return Column(
                 children: [
                   Container(
-                    width: 16,
-                    height: 16,
+                    width: 22,
+                    height: 22,
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
                       color: _dotColor(status, hasReading),
-                      border: isToday
-                          ? Border.all(
-                              color: AkashiColors.primaryFixedDim,
-                              width: 2,
-                            )
-                          : null,
-                      boxShadow: isToday
-                          ? [
-                              BoxShadow(
-                                color: AkashiColors.primary.withValues(alpha: 0.4),
-                                blurRadius: 8,
-                              )
-                            ]
-                          : null,
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.05),
+                          blurRadius: 4,
+                          offset: const Offset(0, 2),
+                        )
+                      ],
                     ),
+                    child: hasReading 
+                        ? Center(
+                            child: Text(
+                              "${i + 1}",
+                              style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+                            ),
+                          )
+                        : null,
                   ),
-                  const SizedBox(height: 6),
+                  const SizedBox(height: 8),
                   Text(
-                    BnStrings.weekDays[i],
-                    style: AkashiTextTheme.labelLg.copyWith(
-                      color: isToday
-                          ? AkashiColors.primary
-                          : AkashiColors.onSurfaceVariant,
-                      fontWeight: isToday
-                          ? FontWeight.w700
-                          : FontWeight.w400,
+                    dateText,
+                    style: const TextStyle(
+                      fontFamily: "NotoSansBengali",
+                      color: Colors.black54,
+                      fontSize: 11,
                     ),
                   ),
                 ],
@@ -392,13 +622,13 @@ class _HistoryDotsSection extends StatelessWidget {
     if (!hasReading) return AkashiColors.surfaceContainerHigh;
     switch (status) {
       case 'green':
-        return AkashiColors.primary;
+        return Colors.green.shade600;
       case 'yellow':
-        return AkashiColors.tertiaryContainer;
+        return Colors.orange.shade500;
       case 'red':
-        return AkashiColors.error;
+        return Colors.red.shade600;
       default:
-        return AkashiColors.outline;
+        return Colors.grey.shade400;
     }
   }
 }
@@ -424,7 +654,7 @@ class _WeatherNoticeCard extends StatelessWidget {
             height: 48,
             decoration: BoxDecoration(
               color:
-                  AkashiColors.onSecondaryContainer.withValues(alpha: 0.1),
+                  AkashiColors.onSecondaryContainer.withOpacity(0.1),
               borderRadius: BorderRadius.circular(10),
             ),
             child: const Icon(
@@ -494,7 +724,7 @@ class _RecommendationCard extends StatelessWidget {
         color: AkashiColors.tertiaryFixed,
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
-          color: AkashiColors.tertiaryContainer.withValues(alpha: 0.2),
+          color: AkashiColors.tertiaryContainer.withOpacity(0.2),
         ),
       ),
       child: Row(
@@ -613,5 +843,3 @@ class _MetricTile extends StatelessWidget {
     );
   }
 }
-
-

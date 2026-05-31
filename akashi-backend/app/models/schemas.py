@@ -56,6 +56,7 @@ class RegisterFarmerRequest(BaseModel):
     district: str = Field(..., description="One of 64 districts in Bangladesh")
     upazila: str = Field(..., description="Upazila name")
     fcm_token: Optional[str] = Field(None, description="FCM Push notification token")
+    consent_given: bool = Field(False, description="Explicit consent to terms and privacy policy")
 
 class UpdateFcmRequest(BaseModel):
     """Request schema for silent FCM token updates."""
@@ -120,3 +121,21 @@ class FieldDetailResponse(BaseModel):
     created_at: str
     latest_reading: Optional[HealthReadingResponse] = None
     history: List[HealthReadingResponse] = []
+
+# ─── Chatbot Schemas ──────────────────────────────────────────────────────────
+
+class ChatRequest(BaseModel):
+    """Request schema for conversational chatbot query."""
+    query: str = Field(..., max_length=1000, description="Farmer's question or advisory query")
+
+class ChatCitation(BaseModel):
+    """Represents a RAG source document citation."""
+    source_file: str
+    chunk_index: int
+    similarity: float
+
+class ChatResponse(BaseModel):
+    """Response schema returned by the conversational RAG chatbot."""
+    response: str = Field(..., description="Elegantly generated Bengali advisory statement")
+    citations: List[ChatCitation] = Field([], description="Agromonic PDF source document citations")
+

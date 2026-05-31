@@ -9,12 +9,18 @@ Reference: Akashi MVP Spec v1.0, Section 5
 """
 
 import os
+import time
+import json
 import logging
+import datetime
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, Depends, HTTPException, status, Header
+from fastapi import FastAPI, Depends, HTTPException, status, Header, Request
 from fastapi.middleware.cors import CORSMiddleware
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from dotenv import load_dotenv
+import sentry_sdk
+from sentry_sdk.integrations.fastapi import FastApiIntegration
+from starlette.middleware.base import BaseHTTPMiddleware
 
 # Load env variables before routing imports
 load_dotenv()
@@ -26,7 +32,18 @@ logging.basicConfig(
 )
 logger = logging.getLogger("akashi.main")
 
-from app.api import farmers, fields, health, weather, gov
+# Sentry SDK Error Tracking Integration (Session J)
+sentry_dsn = os.getenv("SENTRY_DSN")
+if sentry_dsn:
+    sentry_sdk.init(
+        dsn=sentry_dsn,
+        integrations=[FastApiIntegration()],
+        traces_sample_rate=1.0,
+        profiles_sample_rate=1.0,
+    )
+    logger.info("🎯 Sentry SDK initialized for production error monitoring.")
+
+from app.api import farmers, fields, health, weather, gov, chat
 from app.services.scheduler import cron_scheduler_service
 
 # Initialize background task scheduler
@@ -41,8 +58,6 @@ async def lifespan(app: FastAPI):
     logger.info("🚀 Starting Akashi FastAPI Application...")
     
     # Register periodic satellite NDVI cron job (Spec Phase 4 / Section 11)
-    # Runs every 5 days. We also use a jitter of 1 hour to prevent API stampedes
-    # on Sentinel Hub servers.
     scheduler.add_job(
         func=cron_scheduler_service.run_ndvi_for_all_fields,
         trigger="interval",
@@ -71,10 +86,55 @@ app = FastAPI(
     lifespan=lifespan
 )
 
+# Structured JSON Transaction Logging Middleware (Session J)
+class StructuredLoggingMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        start_time = time.time()
+        try:
+            response = await call_next(request)
+            process_time = (time.time() - start_time) * 1000
+            
+            log_payload = {
+                "timestamp": datetime.datetime.now(datetime.UTC).isoformat(),
+                "event": "http_request",
+                "method": request.method,
+                "path": request.url.path,
+                "status_code": response.status_code,
+                "duration_ms": round(process_time, 2),
+                "client_ip": request.client.host if request.client else "unknown"
+            }
+            print(json.dumps(log_payload))
+            return response
+        except Exception as e:
+            process_time = (time.time() - start_time) * 1000
+            log_payload = {
+                "timestamp": datetime.datetime.now(datetime.UTC).isoformat(),
+                "event": "http_error",
+                "method": request.method,
+                "path": request.url.path,
+                "error": str(e),
+                "duration_ms": round(process_time, 2),
+                "client_ip": request.client.host if request.client else "unknown"
+            }
+            print(json.dumps(log_payload))
+            raise e
+
+app.add_middleware(StructuredLoggingMiddleware)
+
 # CORS configurations — allows frontend web dashboard to fetch dashboard data
+allowed_origins = [
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+    "http://localhost:5173",  # Vite default
+    "http://127.0.0.1:5173",
+]
+env_origins = os.getenv("ALLOWED_ORIGINS", "")
+if env_origins:
+    allowed_origins.extend([o.strip() for o in env_origins.split(",") if o.strip()])
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Restrict this to Vercel/localhost domains in production
+    allow_origins=allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -87,6 +147,7 @@ app.include_router(fields.router)       # /fields
 app.include_router(health.router)       # /fields (health summaries & timelines)
 app.include_router(weather.router)     # /weather
 app.include_router(gov.router)         # /gov (analytics dashboards & reports)
+app.include_router(chat.router)        # /chat (agronomic conversational chatbot)
 
 @app.get("/")
 async def root():
@@ -97,6 +158,51 @@ async def root():
         "api_version": "1.0.0",
         "scheduler_running": scheduler.running
     }
+
+@app.get("/health", tags=["System Observability"])
+async def get_system_health():
+    """
+    Highly robust production health check endpoint.
+    Performs live database connectivity validation and calculates operational metrics
+    including registered farmer count and total monitored acreage dynamically.
+    """
+    from app.db.connection import db
+    try:
+        # 1. Validate database connection & count farmers
+        farmers_res = await db.select(
+            table="farmers",
+            select_fields="id",
+            limit=10000
+        )
+        total_farmers = len(farmers_res) if farmers_res else 0
+        
+        # 2. Retrieve fields to calculate total monitored acreage
+        fields_res = await db.select(
+            table="fields",
+            select_fields="area_acres",
+            limit=10000
+        )
+        total_acreage = sum(float(f["area_acres"]) for f in fields_res if f.get("area_acres") is not None) if fields_res else 0.0
+
+        return {
+            "status": "healthy",
+            "database": "connected",
+            "metrics": {
+                "total_farmers": total_farmers,
+                "monitored_acreage_acres": round(total_acreage, 2),
+                "scheduler_running": scheduler.running
+            }
+        }
+    except Exception as e:
+        logger.error(f"❌ Observability health check failed: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail={
+                "status": "unhealthy",
+                "database": "disconnected",
+                "error": str(e)
+            }
+        )
 
 # ─── Internal API for developer testing ───────────────────────────────────────
 

@@ -14,10 +14,12 @@ Reference: Akashi MVP Spec v1.0, Section 5.2
 """
 
 import logging
+import datetime
 from typing import Dict, Any
 from fastapi import APIRouter, Depends, HTTPException, status
 from app.db.connection import db
 from app.api.auth import get_current_user, get_current_farmer
+from app.services.audit import log_audit_action
 from app.models.schemas import (
     SendOtpRequest,
     VerifyOtpRequest,
@@ -74,6 +76,13 @@ async def verify_otp(payload: VerifyOtpRequest):
     # Handle Mock Verification Fallback
     if token == "123456":
         logger.warning(f"🔑 Mock Verification triggered for {phone}. Issuing mock JWT token.")
+        # Log successful mock login
+        await log_audit_action(
+            actor_id="00000000-0000-0000-0000-000000000000",
+            actor_role="farmer",
+            action="login",
+            payload={"phone": phone, "mode": "mock"}
+        )
         # Return mock JWT response
         return {
             "access_token": "mock_jwt_token_for_frictionless_developer_testing_akashi",
@@ -93,6 +102,15 @@ async def verify_otp(payload: VerifyOtpRequest):
         session = res.get("session", {})
         user = res.get("user", {})
         
+        # Log successful production login
+        actor_id = user.get("id") or phone
+        await log_audit_action(
+            actor_id=actor_id,
+            actor_role="farmer",
+            action="login",
+            payload={"phone": phone, "mode": "production"}
+        )
+
         return {
             "access_token": session.get("access_token"),
             "token_type": "bearer",
@@ -138,7 +156,9 @@ async def register_farmer(
         "name": payload.name,
         "district": payload.district,
         "upazila": payload.upazila,
-        "fcm_token": payload.fcm_token
+        "fcm_token": payload.fcm_token,
+        "consent_given": payload.consent_given,
+        "consent_timestamp": datetime.datetime.now().isoformat() if payload.consent_given else None
     }
 
     try:
@@ -150,6 +170,13 @@ async def register_farmer(
                 filters={"phone": f"eq.{phone}"}
             )
             logger.info(f"Updated farmer profile for phone {phone}")
+            await log_audit_action(
+                actor_id=existing[0].get("id") or phone,
+                actor_role="farmer",
+                action="profile_updated",
+                district=payload.district,
+                payload={"consent_given": payload.consent_given}
+            )
         else:
             # Create new profile row in farmers table
             res = await db.insert(
@@ -157,6 +184,13 @@ async def register_farmer(
                 data=farmer_data
             )
             logger.info(f"Registered new farmer profile for phone {phone}")
+            await log_audit_action(
+                actor_id=res[0].get("id") or phone,
+                actor_role="farmer",
+                action="profile_created",
+                district=payload.district,
+                payload={"consent_given": payload.consent_given}
+            )
             
         return {"status": "success", "profile": res[0]}
     except Exception as e:

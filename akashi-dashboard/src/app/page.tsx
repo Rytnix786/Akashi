@@ -18,20 +18,30 @@ export default function LoginPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
     setError('');
 
-    // Pre-configured login credentials for easy testing/review
-    setTimeout(() => {
-      if (email.trim() === 'officer@dae.gov.bd' || email.trim() === 'admin') {
-        router.push('/dashboard');
-      } else {
-        setError('ভুল ইমেল বা পাসওয়ার্ড। অনুগ্রহ করে পুনরায় চেষ্টা করুন।');
-        setIsLoading(false);
+    try {
+      const res = await fetch('/api/login', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ email, password }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || 'ভুল ইমেল বা পাসওয়ার্ড। অনুগ্রহ করে পুনরায় চেষ্টা করুন।');
       }
-    }, 800);
+
+      router.push('/dashboard');
+    } catch (err: any) {
+      setError(err.message || 'সার্ভারের সাথে সংযোগ করা যাচ্ছে না।');
+      setIsLoading(false);
+    }
   };
 
   return (

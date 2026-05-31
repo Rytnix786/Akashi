@@ -1,0 +1,102 @@
+[
+    {
+        "id": "SW46.9L",
+        "name": "Hardinge Bridge",
+        "river": "Padma",
+        "district": "Pabna",
+        "lat": 24.0744,
+        "lon": 89.0296,
+        "danger_level_cm": 1450,
+        "warning_level_cm": 1400
+    },
+    {
+        "id": "SW90.5L",
+        "name": "Sirajganj",
+        "river": "Jamuna",
+        "district": "Sirajganj",
+        "lat": 24.4536,
+        "lon": 89.7160,
+        "danger_level_cm": 1380,
+        "warning_level_cm": 1330
+    },
+    {
+        "id": "SW182.5L",
+        "name": "Bahadurabad",
+        "river": "Jamuna",
+        "district": "Jamalpur",
+        "lat": 25.1833,
+        "lon": 89.6667,
+        "danger_level_cm": 2000,
+        "warning_level_cm": 1950
+    },
+    {
+        "id": "SW75L",
+        "name": "Mawa",
+        "river": "Padma",
+        "district": "Munshiganj",
+        "lat": 23.3833,
+        "lon": 90.3167,
+        "danger_level_cm": 650,
+        "warning_level_cm": 600
+    },
+    {
+        "id": "SW266L",
+        "name": "Sylhet",
+        "river": "Surma",
+        "district": "Sylhet",
+        "lat": 24.8949,
+        "lon": 91.8687,
+        "danger_level_cm": 1030,
+        "warning_level_cm": 980
+    },
+    {
+        "id": "SW298L",
+        "name": "Sunamganj",
+        "river": "Surma",
+        "district": "Sunamganj",
+        "lat": 25.0651,
+        "lon": 91.3950,
+        "danger_level_cm": 740,
+        "warning_level_cm": 690
+    },
+    {
+        "id": "SW170L",
+        "name": "Kazipur",
+        "river": "Jamuna",
+        "district": "Sirajganj",
+        "lat": 24.6833,
+        "lon": 89.6500,
+        "danger_level_cm": 1450,
+        "warning_level_cm": 1400
+    },
+    {
+        "id": "SW42L",
+        "name": "Rajshahi",
+        "river": "Padma",
+        "district": "Rajshahi",
+        "lat": 24.3745,
+        "lon": 88.6042,
+        "danger_level_cm": 1820,
+        "warning_level_cm": 1780
+    },
+    {
+        "id": "SW39L",
+        "name": "Goalundo",
+        "river": "Padma",
+        "district": "Rajbari",
+        "lat": 23.8330,
+        "lon": 89.8170,
+        "danger_level_cm": 620,
+        "warning_level_cm": 570
+    },
+    {
+        "id": "SW307.5L",
+        "name": "Bhairab Bazar",
+        "river": "Meghna",
+        "district": "Kishoreganj",
+        "lat": 24.0500,
+        "lon": 90.9833,
+        "danger_level_cm": 670,
+        "warning_level_cm": 620
+    }
+]

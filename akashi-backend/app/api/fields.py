@@ -20,6 +20,7 @@ from shapely.geometry import Polygon as ShapelyPolygon
 from app.db.connection import db
 from app.api.auth import get_current_farmer
 from app.models.schemas import CreateFieldRequest, FieldDetailResponse, HealthReadingResponse
+from app.services.audit import log_audit_action
 
 logger = logging.getLogger("akashi.fields")
 router = APIRouter(prefix="/fields", tags=["Fields Registration"])
@@ -114,11 +115,20 @@ async def create_field(
 
         logger.info(f"Registered new field '{payload.name}' ({acres} acres) for farmer {farmer_id}")
         
+        # Log successful field creation in security audit logs
+        new_field = res[0]
+        await log_audit_action(
+            actor_id=farmer_id,
+            actor_role="farmer",
+            action="field_created",
+            district=district,
+            payload={"field_id": new_field["id"], "name": payload.name, "area_acres": acres}
+        )
+
         # Proactively trigger Phase 1 script (via sentinel_service) on signup so the farmer gets
         # their very first NDVI reading instantly instead of waiting 5 days for the cron!
         # This creates a gorgeous, instant WOW effect when onboarding!
         from app.services.sentinel import sentinel_service
-        new_field = res[0]
         
         # We run this in background so it doesn't block the API response
         async def run_initial_ndvi():

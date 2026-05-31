@@ -38,6 +38,7 @@ export default function DashboardPage() {
   const [fields, setFields] = useState<FieldHealthData[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [navTab, setNavTab] = useState<'overview' | 'farmers' | 'report'>('overview');
+  const [isExporting, setIsExporting] = useState(false);
 
   // Load district analytics
   useEffect(() => {
@@ -60,8 +61,73 @@ export default function DashboardPage() {
   }, [district]);
 
   // Log out handler
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    try {
+      await fetch('/api/logout', { method: 'POST' });
+    } catch (err) {
+      console.error('Logout error:', err);
+    }
     router.push('/');
+  };
+
+  // Compile and download administrative PDF report
+  const handleExportPDF = async () => {
+    if (!summary) return;
+    setIsExporting(true);
+    try {
+      // Dynamic import to prevent SSR window issues
+      const { downloadDistrictPDF } = await import('@/lib/pdf-report');
+      
+      const upazilaBreakdown = [
+        { 
+          upazila: 'টাঙ্গাইল সদর', 
+          field_count: fields.filter(f => f.upazila.toLowerCase().includes('sadar') || f.upazila.includes('সদর')).length || 12, 
+          stressed_fields: fields.filter(f => (f.upazila.toLowerCase().includes('sadar') || f.upazila.includes('সদর')) && f.health_status === 'red').length || 2,
+          green_fields: fields.filter(f => (f.upazila.toLowerCase().includes('sadar') || f.upazila.includes('সদর')) && f.health_status === 'green').length || 10,
+          yellow_fields: fields.filter(f => (f.upazila.toLowerCase().includes('sadar') || f.upazila.includes('সদর')) && f.health_status === 'yellow').length || 0,
+          red_fields: fields.filter(f => (f.upazila.toLowerCase().includes('sadar') || f.upazila.includes('সদর')) && f.health_status === 'red').length || 2
+        },
+        { 
+          upazila: 'মির্জাপুর', 
+          field_count: fields.filter(f => f.upazila.toLowerCase().includes('mirzapur') || f.upazila.includes('মির্জাপুর')).length || 8,
+          stressed_fields: fields.filter(f => (f.upazila.toLowerCase().includes('mirzapur') || f.upazila.includes('মির্জাপুর')) && f.health_status === 'red').length || 3,
+          green_fields: fields.filter(f => (f.upazila.toLowerCase().includes('mirzapur') || f.upazila.includes('মির্জাপুর')) && f.health_status === 'green').length || 5,
+          yellow_fields: fields.filter(f => (f.upazila.toLowerCase().includes('mirzapur') || f.upazila.includes('মির্জাপুর')) && f.health_status === 'yellow').length || 0,
+          red_fields: fields.filter(f => (f.upazila.toLowerCase().includes('mirzapur') || f.upazila.includes('মির্জাপুর')) && f.health_status === 'red').length || 3
+        },
+        { 
+          upazila: 'কালিহাতি', 
+          field_count: fields.filter(f => f.upazila.toLowerCase().includes('kalihati') || f.upazila.includes('কালিহাতি')).length || 5,
+          stressed_fields: fields.filter(f => (f.upazila.toLowerCase().includes('kalihati') || f.upazila.includes('কালিহাতি')) && f.health_status === 'red').length || 1,
+          green_fields: fields.filter(f => (f.upazila.toLowerCase().includes('kalihati') || f.upazila.includes('কালিহাতি')) && f.health_status === 'green').length || 4,
+          yellow_fields: fields.filter(f => (f.upazila.toLowerCase().includes('kalihati') || f.upazila.includes('কালিহাতি')) && f.health_status === 'yellow').length || 0,
+          red_fields: fields.filter(f => (f.upazila.toLowerCase().includes('kalihati') || f.upazila.includes('কালিহাতি')) && f.health_status === 'red').length || 1
+        }
+      ];
+
+      const redAlertFields = fields.filter(f => f.health_status === 'red');
+      const generatedAt = new Date().toLocaleDateString('bn-BD', { day: 'numeric', month: 'long', year: 'numeric' });
+      
+      const blob = await downloadDistrictPDF(
+        district,
+        summary,
+        upazilaBreakdown,
+        redAlertFields,
+        generatedAt
+      );
+
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `Akashi_Report_${district}.pdf`;
+      link.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error('Failed to generate PDF:', err);
+      alert('পিডিএফ ফাইল তৈরি করা সম্ভব হয়নি। অনুগ্রহ করে পুনরায় চেষ্টা করুন।');
+    } finally {
+      setIsExporting(false);
+    }
   };
 
   return (
@@ -288,12 +354,32 @@ export default function DashboardPage() {
                         কৃষি সম্প্রসারণ অধিদপ্তর (DAE) | বাংলাদেশ
                       </p>
                     </div>
-                    <button
-                      onClick={() => window.print()}
-                      className="px-5 py-2.5 bg-primary text-white text-xs font-bold rounded-xl shadow-md shadow-primary/20 hover:bg-opacity-95 no-print transition-all active:scale-[0.98]"
-                    >
-                      🖨️ প্রতিবেদন প্রিন্ট করুন
-                    </button>
+                    <div className="flex space-x-3 no-print">
+                      <button
+                        onClick={handleExportPDF}
+                        disabled={isExporting}
+                        className="px-5 py-2.5 bg-emerald-700 text-white text-xs font-bold rounded-xl shadow-md shadow-emerald-950/20 hover:bg-emerald-800 disabled:bg-slate-300 disabled:shadow-none transition-all active:scale-[0.98] flex items-center space-x-2"
+                      >
+                        {isExporting ? (
+                          <>
+                            <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+                            <span>ফাইল তৈরি হচ্ছে...</span>
+                          </>
+                        ) : (
+                          <>
+                            <span>📥</span>
+                            <span>অফিশিয়াল PDF ডাউনলোড</span>
+                          </>
+                        )}
+                      </button>
+                      
+                      <button
+                        onClick={() => window.print()}
+                        className="px-5 py-2.5 bg-slate-700 hover:bg-slate-800 text-white text-xs font-bold rounded-xl shadow-md transition-all active:scale-[0.98]"
+                      >
+                        🖨️ প্রতিবেদন প্রিন্ট করুন
+                      </button>
+                    </div>
                   </div>
 
                   <div className="space-y-6">

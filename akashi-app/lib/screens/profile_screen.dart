@@ -14,6 +14,8 @@ import '../providers/auth_provider.dart';
 import '../providers/farmer_provider.dart';
 import 'auth/phone_entry_screen.dart';
 
+import 'auth/privacy_policy_screen.dart';
+
 class ProfileScreen extends StatelessWidget {
   const ProfileScreen({super.key});
 
@@ -139,6 +141,21 @@ class ProfileScreen extends StatelessWidget {
                       icon: Icons.calendar_month,
                       label: 'রেজিস্ট্রেশন তারিখ',
                       value: dateStr,
+                    ),
+                    const Divider(height: 1, color: AkashiColors.outlineVariant),
+                    GestureDetector(
+                      onTap: () {
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => const PrivacyPolicyScreen(),
+                          ),
+                        );
+                      },
+                      child: const _InfoRow(
+                        icon: Icons.verified_user_outlined,
+                        label: 'গোপনীয়তা নীতি',
+                        value: 'দেখুন ➔',
+                      ),
                     ),
                     const Divider(height: 1, color: AkashiColors.outlineVariant),
                     const _InfoRow(

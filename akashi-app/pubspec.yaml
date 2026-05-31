@@ -46,6 +46,11 @@ dependencies:
   intl: ^0.20.2
   url_launcher: ^6.3.0
 
+  # ─── Leaf disease classification & RAG Chat dependencies ────────────────────
+  camera: ^0.10.5+9
+  image: ^4.2.0
+  speech_to_text: ^6.6.2
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
@@ -56,6 +61,7 @@ flutter:
   
   assets:
     - assets/images/
+    - assets/config/
   
   fonts:
     - family: NotoSansBengali

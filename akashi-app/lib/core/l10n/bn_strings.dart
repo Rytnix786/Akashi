@@ -155,6 +155,12 @@ class BnStrings {
     'লালমনিরহাট', 'নীলফামারী', 'পঞ্চগড়', 'ঠাকুরগাঁও',
   ];
 
+  // ─── Privacy Policy Consent (Session F) ──────────────────────────────────
+  static const String privacyPolicyTitle = 'গোপনীয়তা নীতি এবং শর্তাবলী';
+  static const String privacyConsentLabel = 'আমি আকাশি-র গোপনীয়তা নীতি এবং শর্তাবলীতে সম্মতি দিচ্ছি';
+  static const String readPrivacyPolicy = 'গোপনীয়তা নীতি পড়ুন';
+  static const String consentRequiredError = 'এগিয়ে যাওয়ার আগে গোপনীয়তা নীতিতে সম্মতি প্রদান করতে হবে।';
+
   // ─── Error Messages ────────────────────────────────────────────────────────
   static const String genericError = 'একটি সমস্যা হয়েছে। আবার চেষ্টা করুন।';
   static const String networkError = 'ইন্টারনেট সংযোগ নেই।';

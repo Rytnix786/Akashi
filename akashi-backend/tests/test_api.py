@@ -28,6 +28,23 @@ def test_api_root_health():
     assert json_data["app"] == "Akashi (আকাশি)"
     assert json_data["status"] == "healthy"
 
+def test_system_health_endpoint():
+    """Verifies that the new system health endpoint performs live database metrics check and returns healthy status."""
+    from unittest.mock import patch, AsyncMock
+    mock_farmers = [{"id": "farmer-1"}, {"id": "farmer-2"}]
+    mock_fields = [{"area_acres": 1.5}, {"area_acres": 2.3}]
+    
+    with patch("app.db.connection.db.select", new_callable=AsyncMock) as mock_select:
+        mock_select.side_effect = [mock_farmers, mock_fields]
+        
+        response = client.get("/health")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["status"] == "healthy"
+        assert data["database"] == "connected"
+        assert data["metrics"]["total_farmers"] == 2
+        assert data["metrics"]["monitored_acreage_acres"] == 3.8
+
 # ─── 2. Phone OTP Authentication Tests ────────────────────────────────────────
 
 def test_send_otp_valid_phone():
@@ -89,7 +106,8 @@ def test_get_weather_fallback():
 
 def test_get_gov_district_health_fallback():
     """Verifies that government district metrics are retrieved correctly under fallbacks."""
-    response = client.get("/gov/districts/Tangail/health")
+    headers = {"Authorization": "Bearer mock_gov_token_Tangail"}
+    response = client.get("/gov/districts/Tangail/health", headers=headers)
     assert response.status_code == 200
     data = response.json()
     assert data["district"] == "Tangail"

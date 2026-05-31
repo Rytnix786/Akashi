@@ -69,6 +69,7 @@ class FarmerProvider extends ChangeNotifier {
     required String district,
     required String upazila,
     required String cropType,
+    bool consentGiven = false,
   }) async {
     final userId = _activeUserId;
     if (userId == null) throw Exception('Not authenticated');
@@ -79,6 +80,8 @@ class FarmerProvider extends ChangeNotifier {
       'name': name,
       'district': district,
       'upazila': upazila,
+      'consent_given': consentGiven,
+      'consent_timestamp': consentGiven ? DateTime.now().toUtc().toIso8601String() : null,
     }).select().single();
 
     _farmer = FarmerModel.fromJson(data);

@@ -25,6 +25,7 @@ firebase-admin==6.6.0     # FCM push notifications
 # ─── Utilities ────────────────────────────────────────────────────────────────
 python-jose[cryptography]==3.3.0  # JWT validation
 geojson==3.1.0            # GeoJSON parsing helpers
+sentry-sdk==2.61.0        # Production error observability
 
 # ─── Testing ──────────────────────────────────────────────────────────────────
 pytest==8.3.4

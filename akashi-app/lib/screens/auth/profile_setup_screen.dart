@@ -10,6 +10,7 @@ import '../../core/theme/typography.dart';
 import '../../core/l10n/bn_strings.dart';
 import '../../providers/farmer_provider.dart';
 import '../home_screen.dart';
+import 'privacy_policy_screen.dart';
 
 class ProfileSetupScreen extends StatefulWidget {
   const ProfileSetupScreen({super.key});
@@ -23,6 +24,7 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
   String? _selectedDistrict;
   String? _selectedUpazila;
   String _selectedCropType = BnStrings.cropRice;
+  bool _consentGiven = false;
   bool _isLoading = false;
 
   // Upazila data per district — simplified for MVP
@@ -52,6 +54,15 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
       );
       return;
     }
+    if (!_consentGiven) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(BnStrings.consentRequiredError),
+          backgroundColor: AkashiColors.error,
+        ),
+      );
+      return;
+    }
     setState(() => _isLoading = true);
 
     try {
@@ -60,6 +71,7 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
         district: _selectedDistrict!,
         upazila: _selectedUpazila!,
         cropType: _selectedCropType,
+        consentGiven: _consentGiven,
       );
       if (!mounted) return;
       Navigator.of(context).pushReplacement(
@@ -203,6 +215,76 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
                   ),
                 );
               }).toList(),
+            ),
+            // ── Privacy Consent Checkbox (Session F) ──────────────────
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                color: AkashiColors.surfaceContainerLow,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: _consentGiven
+                      ? AkashiColors.primary.withAlpha(80)
+                      : AkashiColors.outlineVariant,
+                  width: _consentGiven ? 1.5 : 1.0,
+                ),
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  Checkbox(
+                    value: _consentGiven,
+                    activeColor: AkashiColors.primary,
+                    checkColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    onChanged: (val) {
+                      setState(() {
+                        _consentGiven = val ?? false;
+                      });
+                    },
+                  ),
+                  Expanded(
+                    child: GestureDetector(
+                      onTap: () {
+                        setState(() {
+                          _consentGiven = !_consentGiven;
+                        });
+                      },
+                      child: RichText(
+                        text: TextSpan(
+                          style: AkashiTextTheme.bodyMd.copyWith(color: AkashiColors.onSurface),
+                          children: [
+                            const TextSpan(text: 'আমি আকাশি-র '),
+                            WidgetSpan(
+                              alignment: PlaceholderAlignment.middle,
+                              child: GestureDetector(
+                                onTap: () {
+                                  Navigator.of(context).push(
+                                    MaterialPageRoute(
+                                      builder: (_) => const PrivacyPolicyScreen(),
+                                    ),
+                                  );
+                                },
+                                child: Text(
+                                  BnStrings.privacyPolicyTitle,
+                                  style: AkashiTextTheme.bodyMd.copyWith(
+                                    color: AkashiColors.secondary,
+                                    fontWeight: FontWeight.bold,
+                                    decoration: TextDecoration.underline,
+                                  ),
+                                ),
+                              ),
+                            ),
+                            const TextSpan(text: ' পড়েছি এবং এতে সম্মতি দিচ্ছি।'),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
             const SizedBox(height: 40),
 
