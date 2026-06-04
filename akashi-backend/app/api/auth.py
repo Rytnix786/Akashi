@@ -32,9 +32,11 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Security(
     
     # Bypass for mock token in tests and local development
     if token.startswith("mock_jwt_token_"):
+        parts = token.split("mock_jwt_token_")
+        phone = parts[1] if len(parts) > 1 and parts[1] else "+8801712345678"
         return {
             "id": "00000000-0000-0000-0000-000000000000",
-            "phone": "+8801712345678",
+            "phone": phone,
             "email": "mock@akashi.gov.bd",
             "app_metadata": {},
             "user_metadata": {},

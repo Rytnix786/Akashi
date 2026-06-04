@@ -26,23 +26,40 @@ logger = logging.getLogger("akashi.notifications")
 # Global flag to track FCM Admin SDK status
 FCM_READY = False
 
+import sys
+import base64
+import json
+
+IS_TESTING = "pytest" in sys.modules or any("pytest" in arg for arg in sys.argv)
+
 try:
     import firebase_admin
     from firebase_admin import credentials, messaging
     
-    # Check if credentials file exists
+    cred_b64 = os.getenv("FIREBASE_CREDENTIALS_B64")
     cred_path = os.getenv("GOOGLE_APPLICATION_CREDENTIALS", "./firebase-service-account.json")
-    if Path(cred_path).exists():
+    
+    if cred_b64:
+        cred_json = json.loads(base64.b64decode(cred_b64).decode("utf-8"))
+        cred = credentials.Certificate(cred_json)
+        firebase_admin.initialize_app(cred)
+        FCM_READY = True
+        logger.info("🔥 Firebase Admin SDK initialized successfully from B64 env var.")
+    elif Path(cred_path).exists():
         cred = credentials.Certificate(cred_path)
         firebase_admin.initialize_app(cred)
         FCM_READY = True
-        logger.info("🔥 Firebase Admin SDK initialized successfully.")
+        logger.info("🔥 Firebase Admin SDK initialized successfully from credentials file.")
+    elif os.getenv("APP_ENV") == "production":
+        raise RuntimeError("Firebase credentials required in production")
     else:
         logger.warning(
-            f"⚠️ Firebase credentials file '{cred_path}' not found.\n"
+            "⚠️ Firebase credentials not found.\n"
             "   Operating in MOCK/CONSOLE NOTIFICATION MODE. Notifications will be printed to stdout."
         )
 except Exception as e:
+    if os.getenv("APP_ENV") == "production":
+        raise RuntimeError(f"Failed to initialize Firebase Admin SDK: {str(e)}") from e
     logger.error(f"❌ Failed to initialize Firebase Admin SDK: {str(e)}")
     logger.warning("   Operating in MOCK/CONSOLE NOTIFICATION MODE.")
 

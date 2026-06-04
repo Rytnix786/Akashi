@@ -13,13 +13,13 @@ import { DistrictSummary, FieldHealthData, UpazilaBreakdown } from './api';
 // Register Noto Sans Bengali font to support Bengali rendering in PDF canvas
 Font.register({
   family: 'NotoSansBengali',
-  src: 'https://fonts.gstatic.com/s/notosansbengali/v20/Hi_Oi243X9c0G2w0Qd1qM2_w8Gk7r4qP3o4.ttf', // Google Fonts TTF
+  src: '/fonts/NotoSansBengali-Regular.ttf', // Local self-hosted TTF
   fontWeight: 'normal',
 });
 
 Font.register({
   family: 'NotoSansBengaliBold',
-  src: 'https://fonts.gstatic.com/s/notosansbengali/v20/Hi_Oi243X9c0G2w0Qd1qM2_w8Gk7r4qP3o4.ttf', // Fallback to normal if bold not present
+  src: '/fonts/NotoSansBengali-Bold.ttf', // Local self-hosted TTF
   fontWeight: 'bold',
 });
 

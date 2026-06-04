@@ -70,6 +70,7 @@ class CronSchedulerService:
                 "cloud_cover": reading["cloud_cover"],
                 "health_status": new_status,
                 "pixel_count": reading["pixel_count"],
+                "data_source": reading.get("data_source"),
                 "raw_response": reading["raw_response"]
             })
             logger.info(f"Saved reading for field {field_id}. Status: {new_status}")

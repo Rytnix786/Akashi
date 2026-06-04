@@ -67,7 +67,33 @@ async def get_latest_health(
     Gets the latest NDVI crop health reading and Bengali recommendation for a field.
     Spec Reference: Screen 5 / Screen 7
     """
+    if current_farmer.get("id") is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Farmer profile must be fully registered before querying health."
+        )
+
     try:
+        # IDOR check: Verify ownership and get crop type
+        field_info = await db.select(
+            table="fields",
+            select_fields="crop_type, farmer_id",
+            filters={"id": f"eq.{id}"},
+            limit=1
+        )
+        if not field_info:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="জমি খুঁজে পাওয়া যায়নি।"
+            )
+        if field_info[0]["farmer_id"] != current_farmer.get("id"):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="অননুমোদিত অ্যাক্সেস: আপনি অন্য কৃষকের জমির তথ্য দেখতে পারবেন না।"
+            )
+
+        crop_type = field_info[0]["crop_type"] or "ধান"
+
         # Retrieve the latest reading for the field
         readings = await db.select(
             table="health_readings",
@@ -95,15 +121,6 @@ async def get_latest_health(
         cloud_val = float(r["cloud_cover"]) if r["cloud_cover"] is not None else 0.0
         health_stat = r["health_status"] or "unknown"
 
-        # Fetch field's crop type to compute recommendations
-        field_info = await db.select(
-            table="fields",
-            select_fields="crop_type",
-            filters={"id": f"eq.{id}"},
-            limit=1
-        )
-        crop_type = field_info[0]["crop_type"] if field_info else "ধান"
-
         # Compute Bengali recommendation
         rec = get_bengali_recommendation(health_stat, crop_type, cloud_val, ndwi_val)
 
@@ -117,6 +134,8 @@ async def get_latest_health(
             "recommendation_bn": rec
         }
 
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Failed to fetch latest crop health for field {id}: {str(e)}")
         raise HTTPException(
@@ -134,7 +153,33 @@ async def get_health_history(
     Fetches the history of the last 12 health readings (roughly 60 days) for a field.
     Used for Screen 7's historical status dots.
     """
+    if current_farmer.get("id") is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Farmer profile must be fully registered before querying health history."
+        )
+
     try:
+        # IDOR check: Verify ownership and get crop type
+        field_info = await db.select(
+            table="fields",
+            select_fields="crop_type, farmer_id",
+            filters={"id": f"eq.{id}"},
+            limit=1
+        )
+        if not field_info:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="জমি খুঁজে পাওয়া যায়নি।"
+            )
+        if field_info[0]["farmer_id"] != current_farmer.get("id"):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="অননুমোদিত অ্যাক্সেস: আপনি অন্য কৃষকের জমির তথ্য দেখতে পারবেন না।"
+            )
+
+        crop_type = field_info[0]["crop_type"] or "ধান"
+
         # Fetch the last 12 readings in descending date order
         readings = await db.select(
             table="health_readings",
@@ -143,15 +188,6 @@ async def get_health_history(
             order_by="reading_date.desc",
             limit=12
         )
-
-        # Get field crop_type for recommendations
-        field_info = await db.select(
-            table="fields",
-            select_fields="crop_type",
-            filters={"id": f"eq.{id}"},
-            limit=1
-        )
-        crop_type = field_info[0]["crop_type"] if field_info else "ধান"
 
         history_response = []
         # Return in ascending order (left-to-right timeline for UI dots)
@@ -175,6 +211,8 @@ async def get_health_history(
 
         return history_response
 
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Failed to fetch health history for field {id}: {str(e)}")
         raise HTTPException(

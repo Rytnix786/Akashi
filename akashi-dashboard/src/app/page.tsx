@@ -38,8 +38,9 @@ export default function LoginPage() {
       }
 
       router.push('/dashboard');
-    } catch (err: any) {
-      setError(err.message || 'সার্ভারের সাথে সংযোগ করা যাচ্ছে না।');
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : 'সার্ভারের সাথে সংযোগ করা যাচ্ছে না।';
+      setError(errorMsg);
       setIsLoading(false);
     }
   };

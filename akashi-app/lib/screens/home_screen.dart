@@ -17,6 +17,7 @@ import '../providers/farmer_provider.dart';
 import '../providers/field_provider.dart';
 import '../providers/weather_provider.dart';
 import '../providers/auth_provider.dart';
+import '../providers/offline_sync_provider.dart';
 import '../models/field.dart';
 import '../models/health_reading.dart';
 import 'field/add_field_screen.dart';
@@ -49,12 +50,22 @@ class _HomeScreenState extends State<HomeScreen> {
     final fieldProvider = context.read<FieldProvider>();
     final farmerProvider = context.read<FarmerProvider>();
     final weatherProvider = context.read<WeatherProvider>();
+    final authProvider = context.read<AuthProvider>();
+    final offlineSyncProvider = context.read<OfflineSyncProvider>();
+
+    // Link OfflineSyncProvider and FieldProvider for background auto-flush
+    offlineSyncProvider.setFieldProvider(fieldProvider);
 
     await Future.wait([
       farmerProvider.loadProfile(),
       fieldProvider.loadFields(),
-      weatherProvider.loadWeather(),
+      weatherProvider.loadWeather(accessToken: authProvider.accessToken),
     ]);
+
+    // Proactively trigger flush if starting online
+    if (offlineSyncProvider.isOnline) {
+      await offlineSyncProvider.flushQueue(fieldProvider);
+    }
   }
 
   void _onNavTap(int index) {
@@ -91,8 +102,17 @@ class _HomeTab extends StatelessWidget {
     return RefreshIndicator(
       color: AkashiColors.primary,
       onRefresh: () async {
-        await context.read<FieldProvider>().loadFields();
-        await context.read<WeatherProvider>().loadWeather();
+        final fieldProvider = context.read<FieldProvider>();
+        final offlineSync = context.read<OfflineSyncProvider>();
+        await offlineSync.checkConnection();
+        if (offlineSync.isOnline) {
+          await offlineSync.flushQueue(fieldProvider);
+        }
+        await fieldProvider.loadFields();
+        if (context.mounted) {
+          final authProvider = context.read<AuthProvider>();
+          await context.read<WeatherProvider>().loadWeather(accessToken: authProvider.accessToken);
+        }
       },
       child: CustomScrollView(
         slivers: [
@@ -238,26 +258,51 @@ class _CropHealthSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final fieldProvider = context.watch<FieldProvider>();
+    final offlineSync = context.watch<OfflineSyncProvider>();
 
     if (fieldProvider.isLoading) {
       return const _LoadingCard();
     }
 
-    if (fieldProvider.fields.isEmpty) {
+    final queuedFields = offlineSync.fieldQueue.map((item) {
+      return FieldModel(
+        id: item.id,
+        farmerId: '',
+        name: item.name,
+        cropType: item.cropType,
+        cropSeason: item.cropSeason,
+        areaAcres: item.areaAcres,
+        areaBigha: item.areaBigha,
+        district: item.district,
+        upazila: item.upazila,
+        isActive: true,
+        createdAt: item.timestamp,
+        polygonCoordinates: item.polygonCoords,
+        plantingDate: item.plantingDate,
+      );
+    }).toList();
+
+    final allFields = [...queuedFields, ...fieldProvider.fields];
+
+    if (allFields.isEmpty) {
       return const _AddFieldCard();
     }
 
-    final primaryField = fieldProvider.fields.first;
-    final latestReading = fieldProvider.getLatestReading(primaryField.id);
+    final primaryField = allFields.first;
+    final isPending = offlineSync.fieldQueue.any((item) => item.id == primaryField.id);
+    final latestReading = isPending ? null : fieldProvider.getLatestReading(primaryField.id);
 
     return HealthCardWidget(
       field: primaryField,
       reading: latestReading,
-      onTap: () => Navigator.of(context).push(
-        MaterialPageRoute(
-          builder: (_) => FieldDetailScreen(field: primaryField),
-        ),
-      ),
+      isPending: isPending,
+      onTap: isPending
+          ? null
+          : () => Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => FieldDetailScreen(field: primaryField),
+                ),
+              ),
     );
   }
 }
@@ -437,18 +482,39 @@ class _FarmTab extends StatelessWidget {
             style: AkashiTextTheme.headlineMd.copyWith(color: AkashiColors.primary)),
         backgroundColor: AkashiColors.surfaceContainerHigh,
       ),
-      body: Consumer<FieldProvider>(
-        builder: (_, fieldProvider, __) {
+      body: Consumer2<FieldProvider, OfflineSyncProvider>(
+        builder: (_, fieldProvider, offlineSync, __) {
           if (fieldProvider.isLoading) {
             return const Center(
                 child: CircularProgressIndicator(color: AkashiColors.primary));
           }
+
+          final queuedFields = offlineSync.fieldQueue.map((item) {
+            return FieldModel(
+              id: item.id,
+              farmerId: '',
+              name: item.name,
+              cropType: item.cropType,
+              cropSeason: item.cropSeason,
+              areaAcres: item.areaAcres,
+              areaBigha: item.areaBigha,
+              district: item.district,
+              upazila: item.upazila,
+              isActive: true,
+              createdAt: item.timestamp,
+              polygonCoordinates: item.polygonCoords,
+              plantingDate: item.plantingDate,
+            );
+          }).toList();
+
+          final allFields = [...queuedFields, ...fieldProvider.fields];
+
           return ListView.separated(
             padding: const EdgeInsets.all(16),
-            itemCount: fieldProvider.fields.length + 1,
+            itemCount: allFields.length + 1,
             separatorBuilder: (_, __) => const SizedBox(height: 12),
             itemBuilder: (context, index) {
-              if (index == fieldProvider.fields.length) {
+              if (index == allFields.length) {
                 return FilledButton.icon(
                   onPressed: () => Navigator.of(context).push(
                     MaterialPageRoute(builder: (_) => const AddFieldScreen()),
@@ -464,15 +530,19 @@ class _FarmTab extends StatelessWidget {
                   ),
                 );
               }
-              final field = fieldProvider.fields[index];
-              final reading = fieldProvider.getLatestReading(field.id);
+              final field = allFields[index];
+              final isPending = offlineSync.fieldQueue.any((item) => item.id == field.id);
+              final reading = isPending ? null : fieldProvider.getLatestReading(field.id);
               return HealthCardWidget(
                 field: field,
                 reading: reading,
-                onTap: () => Navigator.of(context).push(
-                  MaterialPageRoute(
-                      builder: (_) => FieldDetailScreen(field: field)),
-                ),
+                isPending: isPending,
+                onTap: isPending
+                    ? null
+                    : () => Navigator.of(context).push(
+                          MaterialPageRoute(
+                              builder: (_) => FieldDetailScreen(field: field)),
+                        ),
               );
             },
           );

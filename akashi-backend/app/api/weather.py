@@ -132,9 +132,15 @@ async def get_weather(
     Fetches localized weather forecast and builds Bengali agricultural advisories.
     Spec Reference: Screen 8, Weather Screen
     """
+    app_env = os.getenv("APP_ENV", "development")
     api_key = os.getenv("OPENWEATHER_API_KEY", "")
     
     if not api_key or api_key == "your_openweather_key_here":
+        if app_env == "production":
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Weather service not configured"
+            )
         logger.warning("OpenWeatherMap API Key missing. Falling back to Mock Weather.")
         return generate_mock_weather(lat, lon)
 
@@ -152,14 +158,24 @@ async def get_weather(
             response = await client.get(url, params=params)
             
             if response.status_code != 200:
-                logger.error(f"OpenWeatherMap returned status {response.status_code}. Fallback to mock.")
+                logger.error(f"OpenWeatherMap returned status {response.status_code}.")
+                if app_env == "production":
+                    raise HTTPException(
+                        status_code=status.HTTP_502_BAD_GATEWAY,
+                        detail="Weather service temporarily unavailable"
+                    )
                 return generate_mock_weather(lat, lon)
                 
             data = response.json()
             forecast_list = data.get("list", [])
             
             if not forecast_list:
-                logger.error("Empty list returned from OpenWeatherMap. Fallback to mock.")
+                logger.error("Empty list returned from OpenWeatherMap.")
+                if app_env == "production":
+                    raise HTTPException(
+                        status_code=status.HTTP_502_BAD_GATEWAY,
+                        detail="Weather service temporarily unavailable"
+                    )
                 return generate_mock_weather(lat, lon)
 
             # 1. Parse current weather (first item in response)
@@ -241,5 +257,11 @@ async def get_weather(
             }
 
         except Exception as e:
-            logger.error(f"Weather API request exception: {str(e)}. Fallback to mock.")
+            logger.error(f"Weather API request exception: {str(e)}.")
+            if app_env == "production":
+                raise HTTPException(
+                    status_code=status.HTTP_502_BAD_GATEWAY,
+                    detail="Weather service temporarily unavailable"
+                )
+            logger.warning("Fallback to mock activated.")
             return generate_mock_weather(lat, lon)

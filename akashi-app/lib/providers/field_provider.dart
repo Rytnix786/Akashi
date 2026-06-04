@@ -74,95 +74,10 @@ class FieldProvider extends ChangeNotifier {
         }
       }
     } catch (e) {
-      _error = e.toString();
+      _error = "তথ্য লোড হয়নি — পুনরায় চেষ্টা করুন";
+      _fields = [];
+      _readingsByField = {};
       debugPrint('FieldProvider.loadFields error: $e');
-      
-      // Fallback for mock/offline testing
-      if (userId == '00000000-0000-0000-0000-000000000000' || _fields.isEmpty) {
-        final mockFieldId1 = '11111111-1111-1111-1111-111111111111';
-        final mockFieldId2 = '22222222-2222-2222-2222-222222222222';
-        
-        _fields = [
-          FieldModel(
-            id: mockFieldId1,
-            farmerId: userId,
-            name: 'ধানের মাঠ ১',
-            cropType: 'ধান',
-            cropSeason: 'Boro',
-            areaAcres: 1.32,
-            areaBigha: 4.00,
-            district: 'Tangail',
-            upazila: 'Mirzapur',
-            isActive: true,
-            createdAt: DateTime.now().subtract(const Duration(days: 30)),
-          ),
-          FieldModel(
-            id: mockFieldId2,
-            farmerId: userId,
-            name: 'ধানের মাঠ ২',
-            cropType: 'ধান',
-            cropSeason: 'Aman',
-            areaAcres: 0.96,
-            areaBigha: 2.91,
-            district: 'Tangail',
-            upazila: 'Mirzapur',
-            isActive: true,
-            createdAt: DateTime.now().subtract(const Duration(days: 30)),
-          ),
-        ];
-
-        _readingsByField = {
-          mockFieldId1: [
-            HealthReading(
-              id: 'r1',
-              fieldId: mockFieldId1,
-              readingDate: DateTime.now(),
-              ndviMean: 0.49,
-              ndwiMean: 0.18,
-              cloudCover: 22.0,
-              healthStatus: 'yellow',
-              pixelCount: 148,
-              createdAt: DateTime.now(),
-            ),
-            HealthReading(
-              id: 'r2',
-              fieldId: mockFieldId1,
-              readingDate: DateTime.now().subtract(const Duration(days: 5)),
-              ndviMean: 0.64,
-              ndwiMean: 0.21,
-              cloudCover: 18.0,
-              healthStatus: 'green',
-              pixelCount: 142,
-              createdAt: DateTime.now().subtract(const Duration(days: 5)),
-            ),
-          ],
-          mockFieldId2: [
-            HealthReading(
-              id: 'r3',
-              fieldId: mockFieldId2,
-              readingDate: DateTime.now(),
-              ndviMean: 0.34,
-              ndwiMean: 0.14,
-              cloudCover: 31.0,
-              healthStatus: 'red',
-              pixelCount: 109,
-              createdAt: DateTime.now(),
-            ),
-            HealthReading(
-              id: 'r4',
-              fieldId: mockFieldId2,
-              readingDate: DateTime.now().subtract(const Duration(days: 5)),
-              ndviMean: 0.56,
-              ndwiMean: 0.19,
-              cloudCover: 12.0,
-              healthStatus: 'green',
-              pixelCount: 121,
-              createdAt: DateTime.now().subtract(const Duration(days: 5)),
-            ),
-          ],
-        };
-        _error = null; // Clear error since we supplied mock fallbacks
-      }
     } finally {
       _isLoading = false;
       notifyListeners();
@@ -178,6 +93,7 @@ class FieldProvider extends ChangeNotifier {
     required double areaBigha,
     required String district,
     required String upazila,
+    DateTime? plantingDate,
   }) async {
     final userId = _activeUserId;
     if (userId == null) throw Exception('Not authenticated');
@@ -208,6 +124,7 @@ class FieldProvider extends ChangeNotifier {
       },
       'district': district,
       'upazila': upazila,
+      'planting_date': plantingDate?.toIso8601String().split('T')[0],
     });
 
     await loadFields(); // Refresh

@@ -16,6 +16,7 @@ class FieldModel {
   final String upazila;
   final bool isActive;
   final DateTime createdAt;
+  final DateTime? plantingDate;
 
   const FieldModel({
     required this.id,
@@ -32,6 +33,7 @@ class FieldModel {
     required this.upazila,
     required this.isActive,
     required this.createdAt,
+    this.plantingDate,
   });
 
   factory FieldModel.fromJson(Map<String, dynamic> json) {
@@ -50,6 +52,9 @@ class FieldModel {
       } catch (_) {}
     }
 
+    final pDateVal = json['planting_date'];
+    final DateTime? pDate = pDateVal != null ? DateTime.parse(pDateVal as String) : null;
+
     return FieldModel(
       id: json['id'] as String,
       farmerId: json['farmer_id'] as String,
@@ -63,6 +68,7 @@ class FieldModel {
       upazila: json['upazila'] as String,
       isActive: json['is_active'] as bool? ?? true,
       createdAt: DateTime.parse(json['created_at'] as String),
+      plantingDate: pDate,
     );
   }
 
@@ -76,5 +82,6 @@ class FieldModel {
     'district': district,
     'upazila': upazila,
     'is_active': isActive,
+    'planting_date': plantingDate?.toIso8601String().split('T')[0],
   };
 }

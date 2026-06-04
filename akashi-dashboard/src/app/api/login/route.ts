@@ -39,7 +39,7 @@ export async function POST(request: Request) {
     response.cookies.set('gov_role', data.user.role, { path: '/' });
 
     return response;
-  } catch (err: any) {
+  } catch (err) {
     console.error('Login route handler error:', err);
     return NextResponse.json({ error: 'সার্ভারের সাথে সংযোগ করা যাচ্ছে না।' }, { status: 500 });
   }

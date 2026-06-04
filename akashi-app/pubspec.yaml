@@ -49,7 +49,8 @@ dependencies:
   # ─── Leaf disease classification & RAG Chat dependencies ────────────────────
   camera: ^0.10.5+9
   image: ^4.2.0
-  speech_to_text: ^6.6.2
+  tflite_flutter: ^0.12.1
+  speech_to_text: 7.4.0
 
 dev_dependencies:
   flutter_test:
@@ -62,6 +63,9 @@ flutter:
   assets:
     - assets/images/
     - assets/config/
+    - assets/models/disease_model.tflite
+    - assets/models/class_labels.json
+    - assets/models/bengali_disease_names.json
   
   fonts:
     - family: NotoSansBengali

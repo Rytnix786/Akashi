@@ -449,6 +449,8 @@ async def seed_notifications(farmer_row: Dict[str, Any], field_row: Dict[str, An
 
 
 async def seed_government_users() -> None:
+    import bcrypt
+    hashed = bcrypt.hashpw(b"secure_password_123", bcrypt.gensalt()).decode('utf-8')
     for user in GOVERNMENT_USERS:
         existing = await db.select("government_users", filters={"email": f"eq.{user['email']}"}, limit=1)
         payload = {
@@ -456,6 +458,7 @@ async def seed_government_users() -> None:
             "name": user["name"],
             "role": user["role"],
             "district": user["district"],
+            "password_hash": hashed,
         }
         if existing:
             await db.update("government_users", payload, {"email": f"eq.{user['email']}"})

@@ -37,6 +37,8 @@ export default function DashboardPage() {
   const [summary, setSummary] = useState<DistrictSummary | null>(null);
   const [fields, setFields] = useState<FieldHealthData[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [reloadTrigger, setReloadTrigger] = useState(0);
   const [navTab, setNavTab] = useState<'overview' | 'farmers' | 'report'>('overview');
   const [isExporting, setIsExporting] = useState(false);
 
@@ -44,6 +46,7 @@ export default function DashboardPage() {
   useEffect(() => {
     async function loadData() {
       setIsLoading(true);
+      setError(null);
       try {
         const [sumRes, fieldsRes] = await Promise.all([
           getDistrictSummary(district),
@@ -53,12 +56,13 @@ export default function DashboardPage() {
         setFields(fieldsRes);
       } catch (err) {
         console.error('Failed to load dashboard data:', err);
+        setError('ডেটা লোড হয়নি — পুনরায় চেষ্টা করুন');
       } finally {
         setIsLoading(false);
       }
     }
     loadData();
-  }, [district]);
+  }, [district, reloadTrigger]);
 
   // Log out handler
   const handleLogout = async () => {
@@ -247,6 +251,16 @@ export default function DashboardPage() {
             <div className="h-96 flex items-center justify-center">
               <span className="w-10 h-10 border-4 border-primary border-t-transparent rounded-full animate-spin"></span>
             </div>
+          ) : error ? (
+            <div className="h-96 flex flex-col items-center justify-center space-y-4">
+              <span className="text-lg font-bold text-red-650">{error}</span>
+              <button 
+                onClick={() => setReloadTrigger(prev => prev + 1)}
+                className="px-5 py-2.5 bg-primary text-white text-xs font-bold rounded-xl shadow-md hover:bg-opacity-90 transition-all active:scale-[0.98]"
+              >
+                পুনরায় চেষ্টা করুন
+              </button>
+            </div>
           ) : (
             <>
               {/* Tab 1: Overview Summary */}
@@ -289,7 +303,7 @@ export default function DashboardPage() {
                     <div className="lg:col-span-2 h-[450px] flex flex-col">
                       <h3 className="text-lg font-bold text-slate-800 mb-3.5">জেলা শস্য স্বাস্থ্য স্যাটেলাইট মানচিত্র</h3>
                       <div className="flex-1">
-                        <DistrictMap fields={fields} />
+                        <DistrictMap fields={fields} district={district} />
                       </div>
                     </div>
 

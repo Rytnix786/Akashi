@@ -141,6 +141,45 @@ async def test_chatbot_low_similarity_refusal():
 # ─── 4. Conversational Agronomist Responses & Warnings Tests ──────────────────
 
 @pytest.mark.asyncio
+async def test_chatbot_refuses_non_agronomy_query_even_with_high_similarity_context():
+    """Verifies that unrelated entertainment requests are refused before LLM generation."""
+    mock_farmer = {
+        "id": "farmer-id-123",
+        "phone": "+8801712345678",
+        "district": "Tangail",
+        "crop_type": "ধান",
+        "daily_chat_count": 0,
+        "chat_count_reset_date": datetime.date.today().isoformat()
+    }
+
+    accidental_high_match = [{
+        "id": "rag-chunk-id",
+        "content": "Rice brown spot treatment advice from an agronomy manual.",
+        "source_file": "brri_manual.pdf",
+        "chunk_index": 1,
+        "similarity": 0.91
+    }]
+
+    app.dependency_overrides[get_current_farmer] = lambda: mock_farmer
+
+    try:
+        with patch("app.services.rag.rag_service.retrieve_context", new_callable=AsyncMock, return_value=accidental_high_match):
+            with patch("app.api.chat.call_gemini_agronomist_api", new_callable=AsyncMock) as mock_llm:
+                with patch("app.db.connection.db.insert", new_callable=AsyncMock):
+
+                    headers = {"Authorization": "Bearer mock_jwt_token_test"}
+                    response = client.post("/chat", json={"query": "আমাকে একটি গান গাও"}, headers=headers)
+
+                    assert response.status_code == 200
+                    data = response.json()
+                    assert data["response"] == NO_KNOWLEDGE_REFUSAL
+                    assert len(data["citations"]) == 0
+                    mock_llm.assert_not_called()
+    finally:
+        app.dependency_overrides.clear()
+
+
+@pytest.mark.asyncio
 async def test_chatbot_agronomist_advisory():
     """Verifies chatbot advisory responses and citations matching the query."""
     mock_farmer = {
@@ -164,18 +203,20 @@ async def test_chatbot_agronomist_advisory():
 
     try:
         with patch("app.services.rag.rag_service.retrieve_context", new_callable=AsyncMock, return_value=high_match_chunks):
-            with patch("app.db.connection.db.insert", new_callable=AsyncMock):
-                
-                headers = {"Authorization": "Bearer mock_jwt_token_test"}
-                response = client.post("/chat", json={"query": "আমার ধানে বাদামি দাগ রোগ হয়েছে কি করব?"}, headers=headers)
-                
-                assert response.status_code == 200
-                data = response.json()
-                # Check for standard mock advisor answers
-                assert "বাদামি দাগ" in data["response"]
-                assert "সার" in data["response"]
-                assert len(data["citations"]) == 1
-                assert data["citations"][0]["source_file"] == "brri_manual.pdf"
+            with patch("app.api.chat.call_gemini_agronomist_api", new_callable=AsyncMock, return_value="আপনার ধানে বাদামি দাগ রোগ দেখা দিলে সুষম সার ব্যবহার করুন।") as mock_call:
+                with patch("app.db.connection.db.insert", new_callable=AsyncMock):
+                    
+                    headers = {"Authorization": "Bearer mock_jwt_token_test"}
+                    response = client.post("/chat", json={"query": "আমার ধানে বাদামি দাগ রোগ হয়েছে কি করব?"}, headers=headers)
+                    
+                    assert response.status_code == 200
+                    data = response.json()
+                    # Check for standard mock advisor answers
+                    assert "বাদামি দাগ" in data["response"]
+                    assert "সার" in data["response"]
+                    assert len(data["citations"]) == 1
+                    assert data["citations"][0]["source_file"] == "brri_manual.pdf"
+                    mock_call.assert_called_once()
     finally:
         app.dependency_overrides.clear()
 

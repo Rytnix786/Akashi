@@ -62,31 +62,24 @@ class WeatherProvider extends ChangeNotifier {
   Future<void> loadWeather({
     double lat = AppConfig.bangladeshLat,
     double lon = AppConfig.bangladeshLon,
+    String? accessToken,
   }) async {
-    if (AppConfig.openWeatherApiKey.isEmpty) {
-      // Use mock data when no API key provided
-      _weather = _mockWeatherData();
-      notifyListeners();
-      return;
-    }
-
     _isLoading = true;
     _error = null;
     notifyListeners();
 
     try {
+      final token = accessToken ?? "mock_jwt_token_demo";
       final response = await _dio.get(
-        'https://api.openweathermap.org/data/2.5/forecast',
-        queryParameters: {
-          'lat': lat,
-          'lon': lon,
-          'appid': AppConfig.openWeatherApiKey,
-          'units': 'metric',
-          'cnt': 40, // 5 days × 8 readings/day
-        },
+        '${AppConfig.apiBaseUrl}/weather/$lat/$lon',
+        options: Options(
+          headers: {
+            'Authorization': 'Bearer $token',
+          },
+        ),
       );
 
-      _weather = _parseWeatherResponse(response.data);
+      _weather = _parseBackendWeatherResponse(response.data);
     } catch (e) {
       _error = e.toString();
       _weather = _mockWeatherData(); // Fallback to mock on error
@@ -95,6 +88,32 @@ class WeatherProvider extends ChangeNotifier {
       _isLoading = false;
       notifyListeners();
     }
+  }
+
+  WeatherData _parseBackendWeatherResponse(Map<String, dynamic> data) {
+    final current = data['current'] as Map<String, dynamic>;
+    final forecastList = data['forecast'] as List;
+
+    final forecasts = forecastList.map((item) {
+      final dayForecast = item as Map<String, dynamic>;
+      return DayForecast(
+        dayName: dayForecast['day_name'] as String,
+        maxTempC: (dayForecast['temp_max'] as num).toDouble(),
+        minTempC: (dayForecast['temp_min'] as num).toDouble(),
+        rainChance: (dayForecast['rain_probability'] as num).toDouble(),
+        icon: _weatherIcon(dayForecast['condition_icon'] as String),
+      );
+    }).toList();
+
+    return WeatherData(
+      tempC: (current['temp'] as num).toDouble(),
+      humidity: (current['humidity'] as num).toDouble(),
+      windKmh: (current['wind_speed'] as num).toDouble() * 3.6,
+      rainChance: forecasts.isNotEmpty ? forecasts.first.rainChance : 0.0,
+      condition: current['condition_bn'] as String,
+      conditionIcon: _weatherIcon(current['condition_icon'] as String),
+      forecast: forecasts,
+    );
   }
 
   WeatherData _parseWeatherResponse(Map<String, dynamic> data) {

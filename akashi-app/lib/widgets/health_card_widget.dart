@@ -14,17 +14,19 @@ class HealthCardWidget extends StatelessWidget {
   final FieldModel field;
   final HealthReading? reading;
   final VoidCallback? onTap;
+  final bool isPending;
 
   const HealthCardWidget({
     super.key,
     required this.field,
     this.reading,
     this.onTap,
+    this.isPending = false,
   });
 
   @override
   Widget build(BuildContext context) {
-    final status = reading?.healthStatus ?? 'unknown';
+    final status = isPending ? 'pending' : (reading?.healthStatus ?? 'unknown');
     final cloudCover = reading?.cloudCover ?? 0;
 
     return GestureDetector(
@@ -73,7 +75,7 @@ class HealthCardWidget extends StatelessWidget {
                   ),
 
                   // Cloud cover warning
-                  if (cloudCover > 70) ...[
+                  if (cloudCover > 70 && !isPending) ...[
                     const SizedBox(height: 8),
                     Container(
                       padding: const EdgeInsets.symmetric(
@@ -118,8 +120,8 @@ class HealthCardWidget extends StatelessWidget {
                           style: AkashiTextTheme.labelLgMuted,
                         ),
                       ),
-                      if (onTap != null)
-                        Icon(
+                      if (onTap != null && !isPending)
+                        const Icon(
                           Icons.chevron_right,
                           color: AkashiColors.primary,
                           size: 24,
@@ -137,6 +139,8 @@ class HealthCardWidget extends StatelessWidget {
 
   String _statusHeadline(String status) {
     switch (status) {
+      case 'pending':
+        return 'অপেক্ষমান';
       case 'green':
         return BnStrings.cropGood;
       case 'yellow':
@@ -149,6 +153,7 @@ class HealthCardWidget extends StatelessWidget {
   }
 
   String _statusSubtitle(String status, double cloudCover) {
+    if (status == 'pending') return 'ইন্টারনেট সংযোগ ফিরে আসলে স্বয়ংক্রিয়ভাবে সংরক্ষিত হবে';
     if (cloudCover > 70) return 'মেঘাচ্ছন্ন আকাশের কারণে তথ্য সীমিত';
     switch (status) {
       case 'green':
@@ -164,6 +169,8 @@ class HealthCardWidget extends StatelessWidget {
 
   Color _statusColor(String status) {
     switch (status) {
+      case 'pending':
+        return AkashiColors.secondary;
       case 'green':
         return AkashiColors.primary;
       case 'yellow':
@@ -176,6 +183,7 @@ class HealthCardWidget extends StatelessWidget {
   }
 
   String _lastUpdatedText(HealthReading? reading) {
+    if (isPending) return 'সংরক্ষণ করা হচ্ছে...';
     if (reading == null) return 'আপডেট হয়নি';
     final date = reading.readingDate;
     return '${BnStrings.lastUpdated}: ${BnStrings.toBengaliNumeral(date.day)} ${_bengaliMonth(date.month)}';
@@ -278,6 +286,12 @@ class _StatusBadge extends StatelessWidget {
     String label;
 
     switch (status) {
+      case 'pending':
+        bg = AkashiColors.secondaryFixed;
+        fg = AkashiColors.onSecondaryFixed;
+        icon = Icons.sync;
+        label = 'অপেক্ষমান';
+        break;
       case 'green':
         bg = AkashiColors.primaryFixed;
         fg = AkashiColors.onPrimaryFixed;

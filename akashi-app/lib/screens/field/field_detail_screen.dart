@@ -3,6 +3,7 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
+import 'package:dio/dio.dart';
 
 import '../../core/theme/colors.dart';
 import '../../core/theme/typography.dart';
@@ -18,10 +19,11 @@ class FieldDetailScreen extends StatelessWidget {
 
   const FieldDetailScreen({super.key, required this.field});
 
-  // Calculate dynamic growth stage based on planting date (simulated as 45 days ago)
+  // Calculate dynamic growth stage based on planting date
   // Boro rice variety standard duration is 120 days in Bangladesh
   Map<String, dynamic> _calculateGrowthStage() {
-    final plantingDate = field.createdAt.subtract(const Duration(days: 45));
+    final plantingDate = field.plantingDate ?? field.createdAt;
+    final bool isEstimated = field.plantingDate == null;
     final totalDurationDays = 120;
     final elapsedDays = DateTime.now().difference(plantingDate).inDays;
     final double progress = (elapsedDays / totalDurationDays).clamp(0.0, 1.0);
@@ -41,7 +43,7 @@ class FieldDetailScreen extends StatelessWidget {
     } else if (progress >= 0.50 && progress < 0.80) {
       stageName = "ফুল আসা ও দুধ পর্যায় (Flowering Stage)";
       details = "ধানের শীষ গজানো ও ফুল আসার পর্যায়, জমিতে পর্যাপ্ত সেচ রাখুন";
-      icon = Icons.wheat_ear; // Fallback to Icons.eco if unsupported
+      icon = Icons.grain;
     } else if (progress >= 0.80 && progress < 1.0) {
       stageName = "পাকা পর্যায় (Maturation Stage)";
       details = "ধান পাকার শেষ ধাপ, ফসল কাটার প্রস্তুতি নিন";
@@ -57,35 +59,27 @@ class FieldDetailScreen extends StatelessWidget {
       'details': details,
       'icon': icon,
       'progress': progress,
-      'days': elapsedDays
+      'days': elapsedDays,
+      'isEstimated': isEstimated,
     };
   }
 
-  // Determine regional flood risk level based on monitored stations in district
-  Map<String, dynamic> _checkFloodRisk() {
-    final isHighRiskDistrict = [
-      'sirajganj', 'sylhet', 'sunamganj', 'jamalpur', 'kurigram'
-    ].contains(field.district.toLowerCase());
-
-    if (isHighRiskDistrict) {
-      // sirajganj/sylhet show warning state during monsoon
-      final isWarning = field.district.toLowerCase() == 'tangail' || field.district.toLowerCase() == 'jamalpur';
-      return {
-        'risk': isWarning ? 'warning' : 'critical',
-        'badge': isWarning ? 'বন্যা সতর্কতা (Warning)' : 'বন্যা বিপদসীমা অতিক্রম (Critical)',
-        'message': isWarning 
-            ? 'নিকটবর্তী নদীর পানি বিপদসীমার কাছাকাছি রয়েছে। সতর্ক থাকুন।'
-            : 'নিকটবর্তী নদী অববাহিকায় পানি বিপদসীমা অতিক্রম করেছে! দ্রুত ফসল সুরক্ষার উদ্যোগ নিন।',
-        'color': isWarning ? Colors.orange.shade800 : Colors.red.shade800
-      };
+  // Fetch flood risk from backend API
+  Future<Map<String, dynamic>?> _fetchFloodRisk(String fieldId) async {
+    try {
+      final dio = Dio(BaseOptions(
+        baseUrl: AppConfig.apiBaseUrl,
+        connectTimeout: const Duration(seconds: 4),
+        receiveTimeout: const Duration(seconds: 4),
+      ));
+      final response = await dio.get('/fields/$fieldId/flood-risk');
+      if (response.statusCode == 200) {
+        return Map<String, dynamic>.from(response.data);
+      }
+    } catch (e) {
+      debugPrint("Failed to fetch flood risk: $e");
     }
-
-    return {
-      'risk': 'green',
-      'badge': 'বন্যা ঝুঁকি নেই',
-      'message': 'নিকটবর্তী নদীর পানি বিপদসীমার নিরাপদ স্তরে রয়েছে।',
-      'color': Colors.green.shade800
-    };
+    return null;
   }
 
   @override
@@ -97,10 +91,9 @@ class FieldDetailScreen extends StatelessWidget {
     final highRain = context.watch<WeatherProvider>().highRainWarning;
 
     final growth = _calculateGrowthStage();
-    final flood = _checkFloodRisk();
 
     // Mock Sentinel-1 GRD SAR trigger if cloud cover > 60%
-    final bool wasSarUsed = latestReading != null && latestReading.cloudCover > 60.0;
+    final bool wasSarUsed = (latestReading?.cloudCover ?? 0.0) > 60.0;
 
     return Scaffold(
       backgroundColor: AkashiColors.background,
@@ -137,47 +130,65 @@ class FieldDetailScreen extends StatelessWidget {
         padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
         children: [
           // ── FLOOD ALERTS BANNER ───────────────────────────────────────────
-          if (flood['risk'] != 'green')
-            Container(
-              margin: const EdgeInsets.only(bottom: 16),
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: flood['color'].withOpacity(0.08),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: flood['color']),
-              ),
-              child: Row(
-                children: [
-                  Icon(Icons.warning_amber_rounded, color: flood['color'], size: 28),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+          FutureBuilder<Map<String, dynamic>?>(
+            future: _fetchFloodRisk(field.id),
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.done &&
+                  snapshot.hasData &&
+                  snapshot.data != null) {
+                final flood = snapshot.data!;
+                final riskStatus = flood['status'] ?? 'green';
+                if (riskStatus != 'green') {
+                  final isWarning = riskStatus == 'warning';
+                  final Color color = isWarning ? Colors.orange.shade800 : Colors.red.shade800;
+                  final String badge = isWarning ? 'বন্যা সতর্কতা (Warning)' : 'বন্যা বিপদসীমা অতিক্রম (Critical)';
+                  final String message = flood['message'] ?? '';
+                  
+                  return Container(
+                    margin: const EdgeInsets.only(bottom: 16),
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: color.withOpacity(0.08),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: color),
+                    ),
+                    child: Row(
                       children: [
-                        Text(
-                          flood['badge'],
-                          style: TextStyle(
-                            fontFamily: "NotoSansBengali",
-                            color: flood['color'],
-                            fontWeight: FontWeight.bold,
-                            fontSize: 14,
+                        Icon(Icons.warning_amber_rounded, color: color, size: 28),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                badge,
+                                style: TextStyle(
+                                  fontFamily: "NotoSansBengali",
+                                  color: color,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 14,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                message,
+                                style: const TextStyle(
+                                  fontFamily: "NotoSansBengali",
+                                  color: Colors.black87,
+                                  fontSize: 12,
+                                ),
+                              ),
+                            ],
                           ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          flood['message'],
-                          style: const TextStyle(
-                            fontFamily: "NotoSansBengali",
-                            color: Colors.black87,
-                            fontSize: 12,
-                          ),
-                        ),
+                        )
                       ],
                     ),
-                  )
-                ],
-              ),
-            ),
+                  );
+                }
+              }
+              return const SizedBox.shrink();
+            },
+          ),
 
           // ── 1: Satellite / Map View ─────────────────────────────────────
           _MapSection(field: field),
@@ -227,14 +238,35 @@ class FieldDetailScreen extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
-                  "ফসলের জীবনকাল ও বৃদ্ধি পর্যায় (Growth Stage)",
-                  style: TextStyle(
-                    fontFamily: "NotoSansBengali",
-                    color: Colors.grey,
-                    fontSize: 11,
-                    fontWeight: FontWeight.bold,
-                  ),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text(
+                      "ফসলের জীবনকাল ও বৃদ্ধি পর্যায় (Growth Stage)",
+                      style: TextStyle(
+                        fontFamily: "NotoSansBengali",
+                        color: Colors.grey,
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    if (growth['isEstimated'] == true)
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: AkashiColors.tertiaryFixed,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Text(
+                          "আনুমানিক বৃদ্ধির পর্যায়",
+                          style: AkashiTextTheme.labelLg.copyWith(
+                            color: AkashiColors.onTertiaryFixed,
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                  ],
                 ),
                 const SizedBox(height: 16),
                 Row(

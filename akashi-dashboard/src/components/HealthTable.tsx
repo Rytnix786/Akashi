@@ -19,15 +19,16 @@ export default function HealthTable({ fields }: HealthTableProps) {
   const [selectedStatus, setSelectedStatus] = useState('All');
 
   // Extract unique upazilas for filtering
-  const upazilas = ['All', ...Array.from(new Set(fields.map((f) => f.upazila)))];
+  const upazilas = ['All', ...Array.from(new Set(fields.map((f) => f.upazila || 'অজ্ঞাত')))];
 
   const filteredFields = fields.filter((f) => {
+    const searchLower = searchTerm.toLowerCase();
     const matchesSearch = 
-      f.farmer_name.includes(searchTerm) || 
-      f.farmer_phone.includes(searchTerm) ||
-      f.field_name.includes(searchTerm);
+      (f.farmer_name || '').toLowerCase().includes(searchLower) || 
+      (f.farmer_phone || '').toLowerCase().includes(searchLower) ||
+      (f.field_name || '').toLowerCase().includes(searchLower);
       
-    const matchesUpazila = selectedUpazila === 'All' || f.upazila === selectedUpazila;
+    const matchesUpazila = selectedUpazila === 'All' || (f.upazila || 'অজ্ঞাত') === selectedUpazila;
     const matchesStatus = selectedStatus === 'All' || f.health_status === selectedStatus;
 
     return matchesSearch && matchesUpazila && matchesStatus;
@@ -122,7 +123,7 @@ export default function HealthTable({ fields }: HealthTableProps) {
                   </td>
                   
                   {/* Upazila */}
-                  <td className="px-6 py-4 font-medium text-slate-600">{f.upazila}</td>
+                  <td className="px-6 py-4 font-medium text-slate-600">{f.upazila || 'অজ্ঞাত'}</td>
                   
                   {/* Area */}
                   <td className="px-6 py-4 font-medium text-slate-600">

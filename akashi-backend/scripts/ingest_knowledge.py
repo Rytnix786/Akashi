@@ -68,13 +68,14 @@ async def get_google_embedding(text: str, api_key: str) -> Optional[List[float]]
         # Safe deterministic mock fallback for local sandboxing / unit tests!
         return generate_mock_embedding(text)
 
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/text-embedding-004:embedContent?key={api_key}"
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-embedding-2:embedContent?key={api_key}"
     headers = {"Content-Type": "application/json"}
     payload = {
-        "model": "models/text-embedding-004",
+        "model": "models/gemini-embedding-2",
         "content": {
             "parts": [{"text": text}]
-        }
+        },
+        "outputDimensionality": 768
     }
 
     try:
@@ -139,6 +140,29 @@ def parse_file(file_path: Path) -> str:
             
     return ""
 
+def discover_knowledge_files(kb_dir: Path) -> List[Path]:
+    """
+    Returns all real knowledge files (PDFs and TXTs).
+    If both a .txt and .pdf file exist with the same base name, prefers the .txt file.
+    """
+    all_files = list(kb_dir.iterdir())
+    txt_names = {f.stem.lower() for f in all_files if f.is_file() and f.suffix.lower() == ".txt"}
+    
+    selected_files = []
+    for f in all_files:
+        if not f.is_file():
+            continue
+        suffix = f.suffix.lower()
+        if suffix == ".txt":
+            if f.name.lower() != "test_dummy.txt":
+                selected_files.append(f)
+        elif suffix == ".pdf":
+            # If there is a txt file with the same name, skip the PDF
+            if f.stem.lower() not in txt_names:
+                selected_files.append(f)
+                
+    return sorted(selected_files, key=lambda x: x.name)
+
 async def ingest_knowledge_base():
     """Scans knowledge_base folders, chunks documents, fetches embeddings, and saves to database."""
     # Resolve knowledge base paths (check both project root and backend subdirs)
@@ -162,7 +186,7 @@ async def ingest_knowledge_base():
     
     api_key = os.getenv("GEMINI_API_KEY", "")
     
-    files = [f for f in kb_dir.iterdir() if f.is_file() and f.suffix.lower() in [".txt", ".pdf"]]
+    files = discover_knowledge_files(kb_dir)
     if not files:
         logger.warning(f"No valid .txt or .pdf files found in {kb_dir}")
         return
@@ -182,8 +206,23 @@ async def ingest_knowledge_base():
         logger.info(f"✂️ Segmented {file_path.name} into {len(chunks)} chunks.")
 
         for idx, chunk in enumerate(chunks):
-            # Calculate embedding vector
-            embedding = await get_google_embedding(chunk, api_key)
+            # Detect if language is Bengali (Bengali Unicode Block is \u0980-\u09FF)
+            is_bengali = any('\u0980' <= char <= '\u09FF' for char in chunk)
+            content_en = chunk
+            
+            if is_bengali:
+                try:
+                    from deep_translator import GoogleTranslator
+                    translated = GoogleTranslator(source='auto', target='en').translate(chunk)
+                    if translated:
+                        content_en = translated
+                        logger.info(f"Translated chunk {idx} of {file_path.name} to English.")
+                except Exception as e:
+                    logger.warning(f"Translation failed for chunk {idx} of {file_path.name}: {str(e)}. Falling back to original.")
+                    content_en = chunk
+
+            # Calculate embedding vector on translated English content
+            embedding = await get_google_embedding(content_en, api_key)
             if not embedding:
                 logger.error(f"Failed to generate embedding for chunk {idx} of {file_path.name}")
                 continue
@@ -193,6 +232,7 @@ async def ingest_knowledge_base():
                 # We format embedding as a list of floats (direct REST handles arrays perfectly)
                 await db.insert("knowledge_chunks", {
                     "content": chunk,
+                    "content_en": content_en,
                     "source_file": file_path.name,
                     "chunk_index": idx,
                     "embedding": embedding

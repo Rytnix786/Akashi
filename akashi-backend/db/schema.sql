@@ -113,12 +113,13 @@ CREATE INDEX IF NOT EXISTS idx_notifications_sent_at  ON notifications(sent_at D
 -- Agricultural officers with access to the Next.js dashboard.
 -- district = NULL means national-level access (all districts).
 CREATE TABLE IF NOT EXISTS government_users (
-  id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  email       TEXT UNIQUE NOT NULL,
-  name        TEXT,
-  role        TEXT DEFAULT 'district_officer',
-  district    TEXT,                           -- NULL = national access
-  created_at  TIMESTAMPTZ DEFAULT NOW()
+  id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  email         TEXT UNIQUE NOT NULL,
+  name          TEXT,
+  role          TEXT DEFAULT 'district_officer',
+  district      TEXT,                           -- NULL = national access
+  password_hash TEXT,                           -- Bcrypt password hash
+  created_at    TIMESTAMPTZ DEFAULT NOW()
 );
 
 -- ─── Useful Views ─────────────────────────────────────────────────────────────

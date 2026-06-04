@@ -74,18 +74,6 @@ async def get_current_gov_user(
             detail="অননুমোদিত অ্যাক্সেস: অনুগ্রহ করে আপনার কৃষি আইডি দিয়ে লগইন করুন।"
         )
 
-    # Bypass for mock tokens during offline sandbox testing
-    if token.startswith("mock_gov_token_"):
-        parts = token.split("_")
-        district = parts[3] if len(parts) > 3 else "Tangail"
-        if district.title() == "National" or district.title() == "None":
-            district = None
-        return {
-            "email": "officer@gov.bd",
-            "role": "district_officer" if district else "national_officer",
-            "district": district.title() if district else None
-        }
-
     try:
         payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
         email: str = payload.get("sub", "")
@@ -109,55 +97,6 @@ async def get_current_gov_user(
             detail="সেশন শেষ হয়েছে। অনুগ্রহ করে আবার লগইন করুন।"
         )
 
-# ─── Mock Data Helpers ─────────────────────────────────────────────────────────
-
-def generate_mock_district_summary(district: str) -> Dict[str, Any]:
-    """Generates deterministic, highly realistic mock DAE dashboard metrics for a Bangladesh district."""
-    seed = sum(ord(c) for c in district)
-    total_farmers = (seed * 3) % 450 + 120
-    total_fields = int(total_farmers * 1.3)
-    green = int(total_fields * 0.72)
-    yellow = int(total_fields * 0.20)
-    red = total_fields - green - yellow
-    avg_ndvi = 0.58 + (seed % 10) / 100.0
-    
-    return {
-        "district": district,
-        "farmer_count": total_farmers,
-        "field_count": total_fields,
-        "green_fields": green,
-        "yellow_fields": yellow,
-        "red_fields": red,
-        "avg_ndvi": round(avg_ndvi, 4),
-        "last_updated": "2026-05-30"
-    }
-
-def generate_mock_district_fields(district: str) -> List[Dict[str, Any]]:
-    """Generates realistic mock crop fields for extension dashboard testing."""
-    fields = []
-    upazilas = ["Sadar", "Mirzapur", "Kalihati", "Madhupur"] if district.lower() == "tangail" else ["Sadar", "Trishal", "Bhaluka", "Muktagachha"]
-
-    for i in range(25):
-        status_val = "green" if i < 18 else ("yellow" if i < 23 else "red")
-        ndvi_val = 0.62 if status_val == "green" else (0.38 if status_val == "yellow" else 0.21)
-        upazila = upazilas[i % len(upazilas)]
-        
-        fields.append({
-            "id": f"mock-field-uuid-{i}",
-            "farmer_name": f"কৃষক {i + 1}",
-            "farmer_phone": f"+88017123456{i:02d}",
-            "field_name": f"আমার জমি {i // len(upazilas) + 1}",
-            "crop_type": "ধান" if i % 3 != 0 else "গম",
-            "area_acres": round(1.2 + (i % 5) * 0.4, 2),
-            "area_bigha": round((1.2 + (i % 5) * 0.4) / 0.33, 2),
-            "upazila": upazila,
-            "health_status": status_val,
-            "ndvi_mean": ndvi_val,
-            "reading_date": "2026-05-30"
-        })
-        
-    return fields
-
 # ─── Auth Endpoints ───────────────────────────────────────────────────────────
 
 @router.post("/login", response_model=Dict[str, Any])
@@ -167,41 +106,52 @@ async def DAE_government_login(payload: GovLoginRequest):
     Signs a custom, district-scoped JWT session and registers events in audit logs.
     """
     email = payload.email.strip().lower()
-    
-    # Attribute scoping based on government email structures
-    district = None
-    if "tangail" in email:
-        district = "Tangail"
-    elif "sylhet" in email:
-        district = "Sylhet"
-    elif "sirajganj" in email:
-        district = "Sirajganj"
-    elif "national" in email or "admin" in email:
-        district = None # National-level access
-    else:
-        district = "Tangail" # Default sandbox fallback
 
+    # Query DAE user from DB
     try:
-        # Check if DAE user already exists in DB. If not, auto-seed to prevent blocks!
         existing = await db.select(
             table="government_users",
             filters={"email": f"eq.{email}"},
             limit=1
         )
-        
-        if not existing:
-            await db.insert("government_users", {
-                "email": email,
-                "name": "দায়িত্বরত উপ-সহকারী কৃষি কর্মকর্তা",
-                "role": "district_officer" if district else "national_officer",
-                "district": district
-            })
-            logger.info(f"Auto-seeded government officer profile row for {email}")
     except Exception as e:
-        logger.warning(f"Database officer check/seed bypassed: {str(e)}.")
+        logger.error(f"Database officer check failed: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="ডাটাবেজ সংযোগে ত্রুটি ঘটেছে।"
+        )
+
+    if not existing:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="অননুমোদিত অ্যাক্সেস: ভুল ইমেইল বা পাসওয়ার্ড।"
+        )
+
+    user_record = existing[0]
+    stored_hash = user_record.get("password_hash")
+    if not stored_hash:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="অননুমোদিত অ্যাক্সেস: ভুল ইমেইল বা পাসওয়ার্ড।"
+        )
+
+    import bcrypt
+    try:
+        is_valid = bcrypt.checkpw(payload.password.encode('utf-8'), stored_hash.encode('utf-8'))
+    except Exception as e:
+        logger.error(f"Bcrypt password verification exception: {str(e)}")
+        is_valid = False
+
+    if not is_valid:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="অননুমোদিত অ্যাক্সেস: ভুল ইমেইল বা পাসওয়ার্ড।"
+        )
+
+    district = user_record.get("district")
+    role = user_record.get("role") or "district_officer"
 
     # Issue secure signed JWT
-    role = "district_officer" if district else "national_officer"
     token_payload = {
         "sub": email,
         "role": role,
@@ -282,8 +232,11 @@ async def get_district_health_summary(
             "last_updated": "N/A"
         }
     except Exception as e:
-        logger.warning(f"Database health views failed: {str(e)}. Fallback to mock.")
-        return generate_mock_district_summary(district_clean)
+        logger.error(f"Database health views failed: {str(e)}.")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Database error"
+        )
 
 
 @router.get("/districts/{district}/fields", response_model=List[Dict[str, Any]])
@@ -320,8 +273,11 @@ async def get_district_fields_list(
         )
         return res
     except Exception as e:
-        logger.warning(f"Database fields list failed: {str(e)}. Fallback to mock.")
-        return generate_mock_district_fields(district_clean)
+        logger.error(f"Database fields list failed: {str(e)}.")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Database error"
+        )
 
 
 @router.get("/districts/{district}/report", response_model=Dict[str, Any])
@@ -388,14 +344,7 @@ async def generate_district_pdf_report_data(
         }
     except Exception as e:
         logger.error(f"Error compiling report data: {str(e)}")
-        mock_summary = generate_mock_district_summary(district_clean)
-        return {
-            "district": district_clean,
-            "generated_at": datetime.datetime.now().strftime("%d %B, %Y"),
-            "summary": mock_summary,
-            "upazila_breakdown": [
-                {"upazila": "Sadar", "field_count": 50, "stressed_fields": 5, "green_fields": 40, "yellow_fields": 5, "red_fields": 5},
-                {"upazila": "Mirzapur", "field_count": 30, "stressed_fields": 4, "green_fields": 22, "yellow_fields": 4, "red_fields": 4},
-                {"upazila": "Kalihati", "field_count": 45, "stressed_fields": 2, "green_fields": 40, "yellow_fields": 3, "red_fields": 2}
-            ]
-        }
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Database error"
+        )

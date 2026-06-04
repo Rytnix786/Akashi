@@ -17,6 +17,7 @@ import 'providers/auth_provider.dart';
 import 'providers/farmer_provider.dart';
 import 'providers/field_provider.dart';
 import 'providers/weather_provider.dart';
+import 'providers/offline_sync_provider.dart';
 import 'screens/splash_screen.dart';
 
 /// FCM background message handler — must be top-level function
@@ -64,6 +65,7 @@ class AkashiApp extends StatelessWidget {
     return MultiProvider(
       providers: [
         ChangeNotifierProvider(create: (_) => AuthProvider()),
+        ChangeNotifierProvider(create: (_) => OfflineSyncProvider()),
         ChangeNotifierProvider(
           create: (context) => FarmerProvider(context.read<AuthProvider>()),
         ),

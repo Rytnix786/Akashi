@@ -1,8 +1,9 @@
-import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:dio/dio.dart';
 import 'package:provider/provider.dart';
 import 'package:speech_to_text/speech_to_text.dart' as stt;
+import 'package:supabase_flutter/supabase_flutter.dart';
+import '../../core/config/app_config.dart';
 import '../../providers/offline_sync_provider.dart';
 
 class ChatMessage {
@@ -20,7 +21,7 @@ class ChatMessage {
 }
 
 class ChatScreen extends StatefulWidget {
-  const ChatScreen({Key? super.key}) : super(key: super);
+  const ChatScreen({super.key});
 
   @override
   State<ChatScreen> createState() => _ChatScreenState();
@@ -33,7 +34,7 @@ class _ChatScreenState extends State<ChatScreen> {
   
   bool _isLoading = false;
   final _dio = Dio(BaseOptions(
-    baseUrl: 'http://10.0.2.2:8000', // Standard Android emulator localhost mapping
+    baseUrl: AppConfig.apiBaseUrl,
     connectTimeout: const Duration(seconds: 10),
     receiveTimeout: const Duration(seconds: 15),
   ));
@@ -112,14 +113,13 @@ class _ChatScreenState extends State<ChatScreen> {
     _scrollToBottom();
 
     try {
-      // Fetch dynamic Supabase Auth header
-      // For local developer sandbox tests, we append our mock token!
+      final token = Supabase.instance.client.auth.currentSession?.accessToken ?? "mock_jwt_token_demo";
       final response = await _dio.post(
         '/chat',
         data: {'query': text},
         options: Options(
           headers: {
-            'Authorization': 'Bearer mock_jwt_token_test', // STUB: Replace with real JWT
+            'Authorization': 'Bearer $token',
           },
         ),
       );
@@ -285,7 +285,7 @@ class _ChatScreenState extends State<ChatScreen> {
                 constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.78),
                 padding: const EdgeInsets.all(16.0),
                 decoration: BoxDecoration(
-                  color: message.isMe ? Colors.green.shade750 : Colors.white,
+                  color: message.isMe ? Colors.green.shade700 : Colors.white,
                   borderRadius: BorderRadius.only(
                     topLeft: const Radius.circular(20.0),
                     topRight: const Radius.circular(20.0),

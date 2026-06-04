@@ -22,7 +22,7 @@ logger = logging.getLogger("akashi.chat")
 router = APIRouter(prefix="/chat", tags=["agronomic-chatbot"])
 
 # Dynamic threshold config
-SIMILARITY_THRESHOLD = 0.7
+SIMILARITY_THRESHOLD = 0.6
 DAILY_CHAT_LIMIT = 10
 
 # Official Bengali safety warning appended to chemical recommendations
@@ -47,6 +47,21 @@ def contains_chemical_terms(text: str) -> bool:
     ]
     text_lower = text.lower()
     return any(pattern in text_lower for pattern in chemical_patterns)
+
+def is_agronomy_query(text: str) -> bool:
+    """Returns true only for crop, field, weather, disease, irrigation, or fertilizer questions."""
+    agronomy_terms = [
+        "ধান", "চাল", "বোরো", "আমন", "আউশ", "গম", "ভুট্টা", "আলু", "টমেটো", "ফসল",
+        "জমি", "ক্ষেত", "মাঠ", "চারা", "রোপণ", "বপন", "পাতা", "দাগ", "রোগ", "পোকা",
+        "সার", "ইউরিয়া", "পটাশ", "সেচ", "পানি", "জল", "বন্যা", "আগাছা", "কীটনাশক",
+        "ছত্রাকনাশক", "মাটি", "ফলন", "কৃষি", "চাষ", "আবহাওয়া",
+        "rice", "boro", "aman", "aus", "wheat", "maize", "corn", "potato", "tomato",
+        "crop", "field", "leaf", "spot", "disease", "pest", "fertilizer", "urea",
+        "irrigation", "water", "flood", "weed", "pesticide", "fungicide", "soil", "yield",
+        "agriculture", "farming", "weather",
+    ]
+    text_lower = text.lower()
+    return any(term in text_lower for term in agronomy_terms)
 
 async def check_and_update_rate_limit(farmer: Dict[str, Any]) -> None:
     """
@@ -104,11 +119,10 @@ async def call_gemini_agronomist_api(
     """
     Queries Google's Gemini 2.5 Flash endpoint, passing our robust agronomist system prompt
     and context chunks. Returns compiled Bengali advice text.
-
-    # STUB: Replace with real Gemini API once deployed in production
     """
+    refusal_msg = "এই বিষয়ে আমার কাছে তথ্য নেই। কৃষি সম্প্রসারণ অফিসে যোগাযোগ করুন।"
     if not api_key or api_key == "change_this_to_your_actual_gemini_api_key":
-        return generate_mock_agronomist_response(query, RAG_context, farmer_crop)
+        return refusal_msg
 
     url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={api_key}"
     headers = {"Content-Type": "application/json"}
@@ -155,35 +169,11 @@ async def call_gemini_agronomist_api(
                 text_out = res_data["candidates"][0]["content"]["parts"][0]["text"]
                 return text_out.strip()
             
-            logger.warning(f"Gemini API returned {response.status_code}. Fallback activated.")
+            logger.warning(f"Gemini API returned {response.status_code}. Refusal returned.")
     except Exception as e:
-        logger.debug(f"Gemini LLM network error: {str(e)}. Fallback activated.")
+        logger.debug(f"Gemini LLM network error: {str(e)}. Refusal returned.")
 
-    return generate_mock_agronomist_response(query, RAG_context, farmer_crop)
-
-def generate_mock_agronomist_response(query: str, context: str, crop: str) -> str:
-    """
-    Generates a deterministic high-fidelity mock agronomy response in Bengali.
-    Provides useful local advising when network is offline.
-    """
-    query_lower = query.lower()
-    
-    if "brown" in query_lower or "spots" in query_lower or "বাদামি" in query_lower or "দাগ" in query_lower:
-        return (
-            "ধানের বাদামি দাগ রোগ (Rice Brown Spot) সনাক্ত করা হয়েছে। প্রতিকারের জন্য নিম্নলিখিত পদক্ষেপগুলো গ্রহণ করুন:\n\n"
-            "• **সার ব্যবস্থাপনা:** ইউরিয়া সারের অতিরিক্ত ব্যবহার পরিহার করুন এবং জমিতে সুষম হারে পটাশ সার (Muriate of Potash) ব্যবহার নিশ্চিত করুন।\n"
-            "• **বীজ শোধন:** বপনের পূর্বে পরিষ্কার ও প্রত্যয়িত রোগমুক্ত বীজ ব্যবহার করুন। বীজ শোধনের জন্য গরম পানি পদ্ধতি ব্যবহার করতে পারেন।\n"
-            "• **রাসায়নিক দমন:** আক্রমণ তীব্র আকার ধারণ করলে উপ-সহকারী কৃষি কর্মকর্তার পরামর্শে ম্যানকোজেব (Dithane M-45) অথবা প্রোপিকোনাজল (Tilt 250 EC) নির্দেশিত মাত্রায় স্প্রে করুন।"
-        )
-    
-    # Generic agronomic response matching registered crop context
-    crop_name = crop or "ধান"
-    return (
-        f"আপনার {crop_name} চাষের পরামর্শের জন্য ধন্যবাদ। আমাদের কৃষি তথ্যভাণ্ডার অনুযায়ী:\n\n"
-        "• জমির ড্রেনেজ ব্যবস্থা সচল রাখুন এবং অতিরিক্ত পানি জমতে দেবেন না।\n"
-        "• ফসলের নিয়মিত বৃদ্ধি পর্যবেক্ষণ করুন এবং সুষম জৈব সার ব্যবহার করুন।\n"
-        "• কোনো অস্বাভাবিক পোকার আক্রমণ দেখলে আক্রান্ত পাতা দ্রুত কেটে ধ্বংস করুন।"
-    )
+    return refusal_msg
 
 
 @router.post("", response_model=ChatResponse)
@@ -211,9 +201,13 @@ async def ask_agronomist_chatbot(
     query = payload.query.strip()
     logger.info(f"Chat request from farmer {farmer_id}: {query}")
 
-    # 2. Query RAG vector chunks
-    # Threshold = 0.7, retrieve top 3 chunks
-    chunks = await rag_service.retrieve_context(query, threshold=SIMILARITY_THRESHOLD, limit=3)
+    # 2. Query RAG vector chunks only for agricultural questions.
+    # This prevents unrelated prompts from using accidental high-similarity context.
+    if is_agronomy_query(query):
+        chunks = await rag_service.retrieve_context(query, threshold=SIMILARITY_THRESHOLD, limit=3)
+    else:
+        logger.info("Non-agronomy chat request refused before RAG retrieval.")
+        chunks = []
 
     citations = []
     response_text = ""

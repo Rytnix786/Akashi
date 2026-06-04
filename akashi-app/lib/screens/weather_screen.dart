@@ -142,9 +142,11 @@ class WeatherScreen extends StatelessWidget {
                     height: 160,
                     width: double.infinity,
                     fit: BoxFit.cover,
-                    errorBuilder: (_, __, ___) => Container(
+                    errorBuilder: (_, __, ___) => Image.asset(
+                      'assets/images/weather_fallback.png',
                       height: 160,
-                      color: AkashiColors.surfaceContainer,
+                      width: double.infinity,
+                      fit: BoxFit.cover,
                     ),
                   ),
                   Positioned.fill(

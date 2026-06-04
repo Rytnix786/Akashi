@@ -20,6 +20,7 @@ class AuthProvider extends ChangeNotifier {
   bool get isLoading => _isLoading;
   String? get userId => _userId;
   String? get phone => _phone;
+  String? get accessToken => _supabase.auth.currentSession?.accessToken;
 
   /// Check if a session already exists (called from splash screen)
   Future<void> checkExistingSession() async {

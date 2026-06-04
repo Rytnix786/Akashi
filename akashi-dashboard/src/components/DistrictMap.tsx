@@ -10,7 +10,7 @@
  */
 
 import React, { useEffect } from 'react';
-import { MapContainer, TileLayer, Polygon, Popup } from 'react-leaflet';
+import { MapContainer, TileLayer, Polygon, Popup, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import { FieldHealthData } from '@/lib/api';
 
@@ -19,19 +19,34 @@ import 'leaflet/dist/leaflet.css';
 
 interface DistrictMapProps {
   fields: FieldHealthData[];
+  district: string;
 }
 
-export default function DistrictMap({ fields }: DistrictMapProps) {
+const DISTRICT_CENTERS: Record<string, [number, number]> = {
+  Tangail: [24.2520, 89.9190],
+  Mymensingh: [24.7471, 90.4203],
+  Dhaka: [23.8103, 90.4125],
+  Comilla: [23.4607, 91.1809],
+};
+
+function ChangeMapView({ center, zoom }: { center: [number, number]; zoom: number }) {
+  const map = useMap();
+  useEffect(() => {
+    map.setView(center, zoom);
+  }, [center, zoom, map]);
+  return null;
+}
+
+export default function DistrictMap({ fields, district }: DistrictMapProps) {
   
-  // Center of Tangail/Bangladesh default
-  const centerLat = 24.2520;
-  const centerLon = 89.9190;
+  // Center coordinates based on selected district
+  const [centerLat, centerLon] = DISTRICT_CENTERS[district] || DISTRICT_CENTERS.Tangail;
 
   // Resolve Leaflet icon glitch (standard in Next.js/Webpack builds)
   useEffect(() => {
     // Check if window is active
     if (typeof window !== 'undefined') {
-      delete (L.Icon.Default.prototype as any)._getIconUrl;
+      delete (L.Icon.Default.prototype as unknown as { _getIconUrl?: unknown })._getIconUrl;
       L.Icon.Default.mergeOptions({
         iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon-2x.png',
         iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon.png',
@@ -58,10 +73,11 @@ export default function DistrictMap({ fields }: DistrictMapProps) {
     <div className="w-full h-full relative rounded-2xl overflow-hidden border border-slate-200/60 shadow-lg">
       <MapContainer 
         center={[centerLat, centerLon]} 
-        zoom={14} 
+        zoom={12} 
         style={{ height: '100%', width: '100%' }}
         scrollWheelZoom={false}
       >
+        <ChangeMapView center={[centerLat, centerLon]} zoom={12} />
         <TileLayer
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"

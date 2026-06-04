@@ -17,6 +17,7 @@ import '../../core/l10n/bn_strings.dart';
 import '../../core/config/app_config.dart';
 import '../../providers/field_provider.dart';
 import '../../providers/farmer_provider.dart';
+import '../../providers/offline_sync_provider.dart';
 
 class AddFieldScreen extends StatefulWidget {
   const AddFieldScreen({super.key});
@@ -33,6 +34,22 @@ class _AddFieldScreenState extends State<AddFieldScreen> {
   bool _isLoading = false;
   String _selectedCropType = BnStrings.cropRice;
   String _selectedSeason = BnStrings.seasonBoro;
+  DateTime? _selectedPlantingDate;
+
+  Future<void> _selectPlantingDate(BuildContext context) async {
+    final DateTime? picked = await showDatePicker(
+      context: context,
+      initialDate: DateTime.now(),
+      firstDate: DateTime.now().subtract(const Duration(days: 365)),
+      lastDate: DateTime.now().add(const Duration(days: 30)),
+      locale: const Locale('bn', 'BD'),
+    );
+    if (picked != null) {
+      setState(() {
+        _selectedPlantingDate = picked;
+      });
+    }
+  }
 
   // Bangladesh center default
   LatLng _currentCenter = const LatLng(
@@ -107,6 +124,7 @@ class _AddFieldScreenState extends State<AddFieldScreen> {
 
     setState(() => _isLoading = true);
     final farmer = context.read<FarmerProvider>().farmer;
+    final offlineSync = context.read<OfflineSyncProvider>();
 
     try {
       final areaM2 = _calculateAreaM2();
@@ -119,16 +137,39 @@ class _AddFieldScreenState extends State<AddFieldScreen> {
         [_points[0].longitude, _points[0].latitude], // Close ring
       ];
 
-      await context.read<FieldProvider>().createField(
-        name: _nameController.text.trim(),
-        cropType: _selectedCropType,
-        cropSeason: _selectedSeason,
-        polygonCoords: coords,
-        areaAcres: areaAcres,
-        areaBigha: areaBigha,
-        district: farmer?.district ?? '',
-        upazila: farmer?.upazila ?? '',
-      );
+      if (!offlineSync.isOnline) {
+        await offlineSync.queueFieldRegistration(
+          name: _nameController.text.trim(),
+          cropType: _selectedCropType,
+          cropSeason: _selectedSeason,
+          polygonCoords: coords,
+          areaAcres: areaAcres,
+          areaBigha: areaBigha,
+          district: farmer?.district ?? '',
+          upazila: farmer?.upazila ?? '',
+          plantingDate: _selectedPlantingDate,
+        );
+
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text("ইন্টারনেট সংযোগ নেই। সংযোগ ফিরলে স্বয়ংক্রিয়ভাবে সংরক্ষিত হবে।"),
+            backgroundColor: AkashiColors.tertiary,
+          ),
+        );
+      } else {
+        await context.read<FieldProvider>().createField(
+          name: _nameController.text.trim(),
+          cropType: _selectedCropType,
+          cropSeason: _selectedSeason,
+          polygonCoords: coords,
+          areaAcres: areaAcres,
+          areaBigha: areaBigha,
+          district: farmer?.district ?? '',
+          upazila: farmer?.upazila ?? '',
+          plantingDate: _selectedPlantingDate,
+        );
+      }
 
       if (!mounted) return;
       Navigator.of(context).pop();
@@ -356,6 +397,51 @@ class _AddFieldScreenState extends State<AddFieldScreen> {
                           ),
                         ),
                       ],
+                    ),
+                    const SizedBox(height: 12),
+
+                    // Planting Date Picker (Optional)
+                    InkWell(
+                      onTap: () => _selectPlantingDate(context),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+                        decoration: BoxDecoration(
+                          border: Border.all(color: AkashiColors.outlineVariant),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Row(
+                              children: [
+                                const Icon(Icons.calendar_today, color: AkashiColors.primary, size: 20),
+                                const SizedBox(width: 8),
+                                Text(
+                                  _selectedPlantingDate == null
+                                      ? "রোপণের তারিখ (ঐচ্ছিক)"
+                                      : "রোপণের তারিখ: ${_selectedPlantingDate!.year}-${_selectedPlantingDate!.month.toString().padLeft(2, '0')}-${_selectedPlantingDate!.day.toString().padLeft(2, '0')}",
+                                  style: AkashiTextTheme.bodyLg.copyWith(
+                                    color: _selectedPlantingDate == null
+                                        ? AkashiColors.onSurfaceVariant
+                                        : AkashiColors.onSurface,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            if (_selectedPlantingDate != null)
+                              IconButton(
+                                icon: const Icon(Icons.clear, size: 18),
+                                padding: EdgeInsets.zero,
+                                constraints: const BoxConstraints(),
+                                onPressed: () {
+                                  setState(() {
+                                    _selectedPlantingDate = null;
+                                  });
+                                },
+                              ),
+                          ],
+                        ),
+                      ),
                     ),
                     const SizedBox(height: 16),
 

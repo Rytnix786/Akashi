@@ -15,6 +15,7 @@ class OfflineQueueItem {
   final String district;
   final String upazila;
   final DateTime timestamp;
+  final DateTime? plantingDate;
 
   OfflineQueueItem({
     required this.id,
@@ -27,6 +28,7 @@ class OfflineQueueItem {
     required this.district,
     required this.upazila,
     required this.timestamp,
+    this.plantingDate,
   });
 
   Map<String, dynamic> toJson() => {
@@ -40,6 +42,7 @@ class OfflineQueueItem {
         'district': district,
         'upazila': upazila,
         'timestamp': timestamp.toIso8601String(),
+        'planting_date': plantingDate?.toIso8601String(),
       };
 
   factory OfflineQueueItem.fromJson(Map<String, dynamic> json) => OfflineQueueItem(
@@ -55,10 +58,12 @@ class OfflineQueueItem {
         district: json['district'] as String,
         upazila: json['upazila'] as String,
         timestamp: DateTime.parse(json['timestamp'] as String),
+        plantingDate: json['planting_date'] != null ? DateTime.parse(json['planting_date'] as String) : null,
       );
 }
 
 class OfflineSyncProvider extends ChangeNotifier {
+  FieldProvider? _fieldProvider;
   bool _isOnline = true;
   DateTime? _lastSyncTime;
   List<OfflineQueueItem> _fieldQueue = [];
@@ -68,6 +73,10 @@ class OfflineSyncProvider extends ChangeNotifier {
   DateTime? get lastSyncTime => _lastSyncTime;
   List<OfflineQueueItem> get fieldQueue => _fieldQueue;
   bool get isSyncing => _isSyncing;
+
+  void setFieldProvider(FieldProvider provider) {
+    _fieldProvider = provider;
+  }
 
   OfflineSyncProvider() {
     _loadSyncMetadata();
@@ -123,7 +132,10 @@ class OfflineSyncProvider extends ChangeNotifier {
       notifyListeners();
       if (_isOnline) {
         // Trigger auto-retry of queued operations on reconnect!
-        logger.info("Connection restored. Flushing queued registrations.");
+        debugPrint("Connection restored. Flushing queued registrations.");
+        if (_fieldProvider != null) {
+          flushQueue(_fieldProvider!);
+        }
       }
     }
   }
@@ -176,6 +188,7 @@ class OfflineSyncProvider extends ChangeNotifier {
     required double areaBigha,
     required String district,
     required String upazila,
+    DateTime? plantingDate,
   }) async {
     final newItem = OfflineQueueItem(
       id: 'queued-${DateTime.now().millisecondsSinceEpoch}',
@@ -188,6 +201,7 @@ class OfflineSyncProvider extends ChangeNotifier {
       district: district,
       upazila: upazila,
       timestamp: DateTime.now(),
+      plantingDate: plantingDate,
     );
 
     _fieldQueue.add(newItem);
@@ -217,6 +231,7 @@ class OfflineSyncProvider extends ChangeNotifier {
           areaBigha: item.areaBigha,
           district: item.district,
           upazila: item.upazila,
+          plantingDate: item.plantingDate,
         );
         debugPrint("Successfully synchronized queued field: ${item.name}");
       } catch (e) {

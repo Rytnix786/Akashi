@@ -31,3 +31,5 @@ sentry-sdk==2.61.0        # Production error observability
 pytest==8.3.4
 pytest-asyncio==0.24.0
 httpx==0.28.1             # Also used for async test client
+bcrypt==5.0.0             # For secure government officer password hashing
+

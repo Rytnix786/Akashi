@@ -199,3 +199,55 @@ async def list_fields(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Database read failure during fields retrieval."
         )
+
+
+from app.services.flood_monitor import flood_monitor_service
+
+@router.get("/{field_id}/flood-risk", response_model=Dict[str, Any])
+async def get_field_flood_risk(
+    field_id: str,
+    current_farmer: Dict[str, Any] = Depends(get_current_farmer)
+):
+    """
+    Retrieves dynamic flood warning risk status for a registered field.
+    """
+    if current_farmer.get("id") is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Farmer profile must be fully registered before querying flood risk."
+        )
+
+    try:
+        # IDOR check: Verify the field belongs to the current farmer
+        field_info = await db.select(
+            table="fields",
+            select_fields="farmer_id",
+            filters={"id": f"eq.{field_id}"},
+            limit=1
+        )
+        if not field_info:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="জমি খুঁজে পাওয়া যায়নি।"
+            )
+        if field_info[0]["farmer_id"] != current_farmer.get("id"):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="অননুমোদিত অ্যাক্সেস: আপনি অন্য কৃষকের জমির তথ্য দেখতে পারবেন না।"
+            )
+
+        risk_data = await flood_monitor_service.check_flood_risk(field_id)
+        return risk_data
+    except HTTPException:
+        raise
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(e)
+        )
+    except Exception as e:
+        logger.error(f"Failed to check flood risk: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Error calculating flood risk."
+        )
