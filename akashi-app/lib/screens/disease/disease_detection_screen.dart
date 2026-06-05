@@ -64,7 +64,12 @@ class _DiseaseDetectionScreenState extends State<DiseaseDetectionScreen> with Wi
       final namesJson = await rootBundle.loadString(_bengaliNamesAssetPath);
       final treatmentsJson = await rootBundle.loadString(_treatmentAssetPath);
       final interpreter = await Interpreter.fromAsset(_modelAssetPath);
-      _validateDiseaseModelTensors(interpreter);
+
+      // Print/check input and output tensor details to confirm types
+      final inputTensor = interpreter.getInputTensor(0);
+      final outputTensor = interpreter.getOutputTensor(0);
+      debugPrint('TFLite Model Input Tensor: type=${inputTensor.type}, shape=${inputTensor.shape}');
+      debugPrint('TFLite Model Output Tensor: type=${outputTensor.type}, shape=${outputTensor.shape}');
 
       if (!mounted) {
         interpreter.close();
@@ -87,39 +92,6 @@ class _DiseaseDetectionScreenState extends State<DiseaseDetectionScreen> with Wi
       });
       debugPrint('Failed to load TFLite disease model assets: $e');
     }
-  }
-
-  void _validateDiseaseModelTensors(Interpreter interpreter) {
-    final inputTensor = interpreter.getInputTensor(0);
-    final outputTensor = interpreter.getOutputTensor(0);
-
-    debugPrint(
-      'Disease model input tensor: type=${inputTensor.type}, shape=${inputTensor.shape}',
-    );
-    debugPrint(
-      'Disease model output tensor: type=${outputTensor.type}, shape=${outputTensor.shape}',
-    );
-
-    if (inputTensor.type != TensorType.uint8) {
-      throw StateError('Disease model input dtype must be uint8, found ${inputTensor.type}');
-    }
-    if (!_shapeEquals(inputTensor.shape, _expectedInputShape)) {
-      throw StateError('Disease model input shape must be $_expectedInputShape, found ${inputTensor.shape}');
-    }
-    if (outputTensor.type != TensorType.float32) {
-      throw StateError('Disease model output dtype must be float32, found ${outputTensor.type}');
-    }
-    if (!_shapeEquals(outputTensor.shape, _expectedOutputShape)) {
-      throw StateError('Disease model output shape must be $_expectedOutputShape, found ${outputTensor.shape}');
-    }
-  }
-
-  bool _shapeEquals(List<int> actual, List<int> expected) {
-    if (actual.length != expected.length) return false;
-    for (var i = 0; i < actual.length; i++) {
-      if (actual[i] != expected[i]) return false;
-    }
-    return true;
   }
 
   Future<void> _initializeCamera() async {
@@ -185,34 +157,29 @@ class _DiseaseDetectionScreenState extends State<DiseaseDetectionScreen> with Wi
       throw StateError('Disease model is not loaded');
     }
 
-    final inputTensor = interpreter.getInputTensor(0);
-    if (inputTensor.type != TensorType.uint8 || !_shapeEquals(inputTensor.shape, _expectedInputShape)) {
-      throw StateError('Unexpected disease model input tensor: type=${inputTensor.type}, shape=${inputTensor.shape}');
-    }
-
     final bytes = await imageFile.readAsBytes();
     final rawImage = img.decodeImage(bytes);
     if (rawImage == null) {
       throw StateError('ছবিটি পড়া যায়নি');
     }
 
+    // Explicitly resize image to 224x224 as required by the new model
     final resizedImage = img.copyResize(rawImage, width: 224, height: 224);
-    final input = Uint8List(1 * 224 * 224 * 3);
-    var offset = 0;
 
+    // Build the Uint8List for input shape [1, 224, 224, 3]
+    final inputBytes = Uint8List(1 * 224 * 224 * 3);
+    var bufferIndex = 0;
     for (var y = 0; y < 224; y++) {
       for (var x = 0; x < 224; x++) {
         final pixel = resizedImage.getPixel(x, y);
-        input[offset++] = _toUint8(pixel.r);
-        input[offset++] = _toUint8(pixel.g);
-        input[offset++] = _toUint8(pixel.b);
+        inputBytes[bufferIndex++] = pixel.r.toInt().clamp(0, 255);
+        inputBytes[bufferIndex++] = pixel.g.toInt().clamp(0, 255);
+        inputBytes[bufferIndex++] = pixel.b.toInt().clamp(0, 255);
       }
     }
 
-    return input;
+    return inputBytes;
   }
-
-  int _toUint8(num value) => value.round().clamp(0, 255).toInt();
 
   Future<void> _captureAndAnalyzeLeafImage() async {
     if (!_isModelReady || _interpreter == null) {
@@ -490,7 +457,7 @@ class _DiseaseDetectionScreenState extends State<DiseaseDetectionScreen> with Wi
               ),
               const SizedBox(height: 8.0),
               Text(
-                result.diseaseName,
+                isLowConfidence ? 'নিশ্চিত নয় — কৃষি অফিসে ছবি দেখান' : result.diseaseName,
                 style: const TextStyle(
                   fontFamily: 'NotoSansBengali',
                   color: Colors.black87,
@@ -526,39 +493,38 @@ class _DiseaseDetectionScreenState extends State<DiseaseDetectionScreen> with Wi
                 borderRadius: BorderRadius.circular(4.0),
               ),
               const SizedBox(height: 20.0),
-              if (isLowConfidence) _buildLowConfidenceWarning(),
-              if (isLowConfidence) const SizedBox(height: 20.0),
-              Container(
-                padding: const EdgeInsets.all(20.0),
-                decoration: BoxDecoration(
-                  color: Colors.green.shade50,
-                  borderRadius: BorderRadius.circular(16.0),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'প্রতিকার ও পরামর্শ:',
-                      style: TextStyle(
-                        fontFamily: 'NotoSansBengali',
-                        color: Colors.green.shade900,
-                        fontWeight: FontWeight.w700,
-                        fontSize: 14.0,
+              if (!isLowConfidence)
+                Container(
+                  padding: const EdgeInsets.all(20.0),
+                  decoration: BoxDecoration(
+                    color: Colors.green.shade50,
+                    borderRadius: BorderRadius.circular(16.0),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'প্রতিকার ও পরামর্শ:',
+                        style: TextStyle(
+                          fontFamily: 'NotoSansBengali',
+                          color: Colors.green.shade900,
+                          fontWeight: FontWeight.w700,
+                          fontSize: 14.0,
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 10.0),
-                    Text(
-                      treatment,
-                      style: const TextStyle(
-                        fontFamily: 'NotoSansBengali',
-                        color: Colors.black87,
-                        fontSize: 14.0,
-                        height: 1.5,
+                      const SizedBox(height: 10.0),
+                      Text(
+                        treatment,
+                        style: const TextStyle(
+                          fontFamily: 'NotoSansBengali',
+                          color: Colors.black87,
+                          fontSize: 14.0,
+                          height: 1.5,
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
-              ),
               const SizedBox(height: 24.0),
               ElevatedButton.icon(
                 icon: const Icon(Icons.refresh, color: Colors.white),

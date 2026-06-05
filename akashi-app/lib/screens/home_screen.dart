@@ -24,6 +24,7 @@ import 'field/add_field_screen.dart';
 import 'field/field_detail_screen.dart';
 import 'weather_screen.dart';
 import 'profile_screen.dart';
+import 'chat/chat_screen.dart';
 import '../widgets/health_card_widget.dart';
 import '../widgets/weather_strip_widget.dart';
 import '../widgets/bottom_nav_widget.dart';
@@ -146,17 +147,6 @@ class _HomeTab extends StatelessWidget {
                 ),
               ],
             ),
-            actions: [
-              TextButton(
-                onPressed: () {}, // Language toggle (Phase 2)
-                child: Text(
-                  'English',
-                  style: AkashiTextTheme.labelLg.copyWith(
-                    color: AkashiColors.primary,
-                  ),
-                ),
-              ),
-            ],
           ),
 
           SliverPadding(
@@ -400,14 +390,26 @@ class _QuickActionsGrid extends StatelessWidget {
           label: BnStrings.pestControl,
           backgroundColor: AkashiColors.primaryFixedDim,
           iconColor: AkashiColors.primary,
-          onTap: () {}, // Phase 2
+          onTap: () => Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (_) => const ChatScreen(
+                initialQuery: "আমার ফসলে পোকার আক্রমণ হয়েছে",
+              ),
+            ),
+          ),
         ),
         _QuickActionButton(
           icon: Icons.water_drop,
           label: BnStrings.irrigationAdvice,
           backgroundColor: AkashiColors.tertiaryFixedDim,
           iconColor: AkashiColors.tertiary,
-          onTap: () {}, // Phase 2
+          onTap: () => Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (_) => const ChatScreen(
+                initialQuery: "আমার জমিতে কতটুকু সেচ দেব",
+              ),
+            ),
+          ),
         ),
       ],
     );

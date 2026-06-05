@@ -377,3 +377,22 @@ async def test_get_field_ndvi_fallback_to_sar(sentinel_service):
                 assert res["cloud_cover"] == 0.0
                 assert res["raw_response"]["vh_mean"] == -13.0
 
+
+@pytest.mark.asyncio
+async def test_sentinel_service_mock_mode_fallback():
+    """Verifies that sentinel_service correctly returns mock NDVI when in mock mode."""
+    # Create a service with client_id/client_secret missing (mock mode)
+    service = SentinelHubService()
+    service.client_id = ""
+    service.client_secret = ""
+    assert service._is_mock_mode() is True
+    
+    polygon = {
+        "type": "Polygon",
+        "coordinates": [[[89.9, 24.2], [90.0, 24.2], [90.0, 24.3], [89.9, 24.3], [89.9, 24.2]]]
+    }
+    res = await service.get_field_ndvi(polygon, "rice", "field_mock_test")
+    assert res["raw_response"]["mock"] is True
+    assert res["health_status"] in ["green", "yellow", "red"]
+    assert res["ndvi_mean"] is not None
+

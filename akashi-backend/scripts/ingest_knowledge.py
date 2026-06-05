@@ -157,8 +157,10 @@ def discover_knowledge_files(kb_dir: Path) -> List[Path]:
             if f.name.lower() != "test_dummy.txt":
                 selected_files.append(f)
         elif suffix == ".pdf":
-            # If there is a txt file with the same name, skip the PDF
-            if f.stem.lower() not in txt_names:
+            # If there is a txt file with the same name or ocr suffix, skip the PDF
+            stem_lower = f.stem.lower()
+            ocr_stem = stem_lower.replace("_content", "_ocr")
+            if stem_lower not in txt_names and ocr_stem not in txt_names:
                 selected_files.append(f)
                 
     return sorted(selected_files, key=lambda x: x.name)

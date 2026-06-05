@@ -141,3 +141,31 @@ async def test_check_flood_risk_critical():
             assert res["status"] == "critical"
             assert "পানি বিপদসীমা অতিক্রম" in res["message"]
             assert res["stations_evaluated"][0]["status"] == "critical"
+
+
+@pytest.mark.asyncio
+async def test_fetch_live_water_level_simulation():
+    """Verifies that fetch_live_water_level respects simulation environment variables."""
+    import os
+    from unittest.mock import patch
+    
+    service = FloodMonitorService()
+    station_id = "SW90.5L" # Sirajganj station
+    
+    # 1. Test simulation: critical
+    with patch.dict(os.environ, {"SIMULATE_FLOOD_STATION": station_id, "SIMULATE_FLOOD_LEVEL": "critical"}):
+        level = await service.fetch_live_water_level(station_id)
+        # Danger level for Sirajganj is 1380
+        assert level > 1380.0
+        
+    # 2. Test simulation: warning
+    with patch.dict(os.environ, {"SIMULATE_FLOOD_STATION": "all", "SIMULATE_FLOOD_LEVEL": "warning"}):
+        level = await service.fetch_live_water_level(station_id)
+        # 1380 * 0.85 = 1173
+        assert level == 1380.0 * 0.85
+
+    # 3. Test simulation: green
+    with patch.dict(os.environ, {"SIMULATE_FLOOD_STATION": "all", "SIMULATE_FLOOD_LEVEL": "green"}):
+        level = await service.fetch_live_water_level(station_id)
+        # 1380 * 0.5 = 690
+        assert level == 1380.0 * 0.5

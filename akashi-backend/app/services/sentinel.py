@@ -197,6 +197,10 @@ class SentinelHubService:
         except Exception as e:
             raise ValueError(f"Invalid polygon geometry: {str(e)}")
 
+        if self._is_mock_mode():
+            logger.info(f"Sentinel Hub operating in MOCK/DEMO mode. Returning deterministic NDVI fallback for field {field_id_str}.")
+            return self._generate_mock_ndvi(field_id_str, crop_type)
+
         token = await self.get_access_token()
         
         if not token:
@@ -366,6 +370,35 @@ class SentinelHubService:
         Queries Sentinel-1 GRD radar data via the Statistical API.
         Used as a robust fallback during the cloudy monsoon season.
         """
+        if self._is_mock_mode():
+            logger.info(f"Sentinel Hub operating in MOCK/DEMO mode. Returning deterministic SAR fallback for field {field_id_str}.")
+            import hashlib
+            import random
+            seed = int(hashlib.md5(field_id_str.encode()).hexdigest(), 16)
+            r = random.Random(seed)
+            rand_val = r.random()
+            status = "green" if rand_val < 0.70 else "yellow" if rand_val < 0.90 else "red"
+            vh_mean = -11.5 if status == "green" else -13.5 if status == "yellow" else -16.5
+            vv_mean = vh_mean + 6.0
+            now = datetime.now(timezone.utc)
+            return {
+                "ndvi": None,
+                "ndvi_mean": None,
+                "ndwi_mean": None,
+                "cloud_cover": 0.0,
+                "health_status": status,
+                "pixel_count": r.randint(400, 1200),
+                "data_source": "sentinel-1",
+                "date_from": (now - timedelta(days=30)).strftime("%Y-%m-%dT%H:%M:%SZ"),
+                "date_to": now.strftime("%Y-%m-%dT%H:%M:%SZ"),
+                "raw_response": {
+                    "vh_mean": round(vh_mean, 4),
+                    "vv_mean": round(vv_mean, 4),
+                    "data_source": "sentinel-1",
+                    "original_response": {"mock": True, "generated_at": now.isoformat()}
+                }
+            }
+
         token = await self.get_access_token()
         if not token:
             raise RuntimeError("Sentinel Hub authentication failed for Sentinel-1 query.")

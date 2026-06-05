@@ -156,7 +156,7 @@ async def DAE_government_login(payload: GovLoginRequest):
         "sub": email,
         "role": role,
         "district": district,
-        "exp": datetime.datetime.utcnow() + datetime.timedelta(hours=8)
+        "exp": datetime.datetime.now(datetime.UTC) + datetime.timedelta(hours=8)
     }
     
     token = jwt.encode(token_payload, JWT_SECRET, algorithm=JWT_ALGORITHM)

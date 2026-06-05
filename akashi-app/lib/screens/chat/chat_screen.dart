@@ -21,7 +21,8 @@ class ChatMessage {
 }
 
 class ChatScreen extends StatefulWidget {
-  const ChatScreen({super.key});
+  final String? initialQuery;
+  const ChatScreen({super.key, this.initialQuery});
 
   @override
   State<ChatScreen> createState() => _ChatScreenState();
@@ -55,6 +56,13 @@ class _ChatScreenState extends State<ChatScreen> {
       citations: [],
       timestamp: DateTime.now(),
     ));
+
+    if (widget.initialQuery != null && widget.initialQuery!.isNotEmpty) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _messageController.text = widget.initialQuery!;
+        _sendMessage();
+      });
+    }
   }
 
   // Handle Voice capture dictate in Bengali

@@ -150,11 +150,21 @@ class FloodMonitorService:
         except Exception as e:
             logger.debug(f"BWDB live request failed: {str(e)}. Fallback activated.")
 
-        # STUB fallback: deterministic water level derived from danger thresholds
-        # This keeps tests predictable and offline runs resilient!
+        # Allow dynamic simulation for testing and frontend demonstrations
+        sim_station = os.getenv("SIMULATE_FLOOD_STATION", "")
+        sim_level = os.getenv("SIMULATE_FLOOD_LEVEL", "") # 'warning' or 'critical' or 'green'
+        
         for station in self.stations:
             if station["id"] == station_id:
-                # By default, mock stable/safe conditions (70% of danger level)
+                if sim_station == station_id or sim_station == "all":
+                    if sim_level == "critical":
+                        return float(station["danger_level_cm"] + 50.0)
+                    elif sim_level == "warning":
+                        return float(station["danger_level_cm"] * 0.85)
+                    elif sim_level == "green":
+                        return float(station["danger_level_cm"] * 0.5)
+
+                # Standard default fallback (70% danger level)
                 return float(station["danger_level_cm"] * 0.7)
 
         return None

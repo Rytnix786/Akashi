@@ -10,6 +10,7 @@ Reference: Akashi MVP Spec Section 5.3 & RAG Chatbot Phase 2
 import os
 import logging
 import datetime
+import re
 from typing import Dict, Any, List
 from fastapi import APIRouter, Depends, HTTPException, status
 import httpx
@@ -26,10 +27,7 @@ SIMILARITY_THRESHOLD = 0.6
 DAILY_CHAT_LIMIT = 10
 
 # Official Bengali safety warning appended to chemical recommendations
-OFFICIAL_CHEMICAL_WARNING = (
-    "\n\n🚨 **সতর্কতা:** কীটনাশক বা রাসায়নিক ব্যবহারের পূর্বে বোতলের নির্দেশাবলী ভালো করে পড়ুন। "
-    "সবসময় নিরাপদ দূরত্ব বজায় রাখুন এবং মুখে মাস্ক ও হাতে গ্লাভস ব্যবহার করুন।"
-)
+OFFICIAL_CHEMICAL_WARNING = "\n\nসঠিক পরিমাণের জন্য লেবেল পড়ুন বা কৃষি অফিসে যান।"
 
 # Bengali refusal message if similarity match is < 0.7
 NO_KNOWLEDGE_REFUSAL = (
@@ -39,14 +37,22 @@ NO_KNOWLEDGE_REFUSAL = (
 )
 
 def contains_chemical_terms(text: str) -> bool:
-    """Checks if the text mentions any chemical fungicides, pesticides or application terms."""
-    chemical_patterns = [
-        "বিষ", "কীটনাশক", "পেস্টিসাইড", "ফাঙ্গিসাইড", "fungicide", "pesticide",
-        "mancozeb", "mancozeb", "propiconazole", "propiconazole", "ম্যানকোজেব", 
-        "প্রোপিকোনাজল", "ডাইথেন", "কার্বোফুরান", "ফুরাডান", "লরসবান", "কপার", "সালফার"
-    ]
+    """Checks if the text mentions any chemical fungicides, pesticides, fertilizers or application terms."""
     text_lower = text.lower()
-    return any(pattern in text_lower for pattern in chemical_patterns)
+    
+    # Use regular expressions to avoid matching false-positives:
+    # "বিষ" -> exclude "বিষয়", "বিষয়ে" (about/regarding)
+    # "সার" -> exclude "সারা" (all/whole) and conjuncts like "সার্ভিস" (service) / "সার্বিক" (overall)
+    if re.search(r"বিষ(?!য়)", text_lower) or re.search(r"সার(?![া্])", text_lower):
+        return True
+
+    other_chemical_patterns = [
+        "কীটনাশক", "পেস্টিসাইড", "ফাঙ্গিসাইড", "fungicide", "pesticide",
+        "mancozeb", "propiconazole", "ম্যানকোজেব", "প্রোপিকোনাজল", "ডাইথেন", 
+        "কার্বোফুরান", "ফুরাডান", "লরসবান", "কপার", "সালফার",
+        "ইউরিয়া", "fertilizer", "urea"
+    ]
+    return any(pattern in text_lower for pattern in other_chemical_patterns)
 
 def is_agronomy_query(text: str) -> bool:
     """Returns true only for crop, field, weather, disease, irrigation, or fertilizer questions."""
@@ -238,8 +244,8 @@ async def ask_agronomist_chatbot(
         )
 
         # 5. Apply Safety Post-processing filter
-        # If chemical fungicides are mentioned without safety warning, append it
-        if contains_chemical_terms(response_text) and "সতর্কতা" not in response_text:
+        # If chemical fungicides or fertilizers are mentioned without safety warning, append it
+        if contains_chemical_terms(response_text) and "সঠিক পরিমাণের জন্য" not in response_text:
             logger.info("Safety alert triggered: appending chemical application warning.")
             response_text += OFFICIAL_CHEMICAL_WARNING
 
